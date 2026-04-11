@@ -23,7 +23,7 @@
 **Files:**
 - Modify: `apps/api/tests/routes.test.ts`
 
-- [ ] **Step 1: Write the failing test changes**
+- [x] **Step 1: Write the failing test changes**
 
 Update test imports:
 
@@ -63,7 +63,7 @@ it("keeps repository state isolated between app instances", async () => {
 });
 ```
 
-- [ ] **Step 2: Run API tests and confirm RED**
+- [x] **Step 2: Run API tests and confirm RED**
 
 Run:
 
@@ -73,6 +73,8 @@ pnpm --filter @kunpeng-agent-forum/api test
 
 Expected: fail because `../src/in-memory-repository` does not exist and `createApp()` does not accept `repository`.
 
+Observed: `pnpm --filter @kunpeng-agent-forum/api test` failed because `../src/in-memory-repository` did not exist.
+
 ## Task 2: Implement Repository Boundary
 
 **Files:**
@@ -81,7 +83,7 @@ Expected: fail because `../src/in-memory-repository` does not exist and `createA
 - Modify: `apps/api/src/data.ts`
 - Modify: `apps/api/src/routes.ts`
 
-- [ ] **Step 1: Create `repository.ts`**
+- [x] **Step 1: Create `repository.ts`**
 
 Move API-facing types into `repository.ts`:
 
@@ -120,7 +122,7 @@ export type ForumRepository = {
 };
 ```
 
-- [ ] **Step 2: Create `in-memory-repository.ts`**
+- [x] **Step 2: Create `in-memory-repository.ts`**
 
 Move current array-backed behavior into an `InMemoryForumRepository` class with instance fields:
 
@@ -131,7 +133,7 @@ private readonly replies: ReplyRecord[] = [];
 
 Keep `slugify(title: string)` exported for compatibility.
 
-- [ ] **Step 3: Reduce `data.ts` to compatibility re-exports**
+- [x] **Step 3: Reduce `data.ts` to compatibility re-exports**
 
 Replace `data.ts` contents with:
 
@@ -146,7 +148,7 @@ export type {
 export { InMemoryForumRepository, slugify } from "./in-memory-repository";
 ```
 
-- [ ] **Step 4: Inject repository in `routes.ts`**
+- [x] **Step 4: Inject repository in `routes.ts`**
 
 Update `AppOptions`:
 
@@ -174,7 +176,7 @@ repository.createReply(...)
 repository.markThreadSolved(...)
 ```
 
-- [ ] **Step 5: Run API tests and confirm GREEN**
+- [x] **Step 5: Run API tests and confirm GREEN**
 
 Run:
 
@@ -185,7 +187,9 @@ pnpm --filter @kunpeng-agent-forum/api typecheck
 
 Expected: both pass.
 
-- [ ] **Step 6: Commit repository slice**
+Observed: API tests passed with 2 files and 9 tests; API typecheck passed.
+
+- [x] **Step 6: Commit repository slice**
 
 ```powershell
 git add apps/api
@@ -197,7 +201,7 @@ git commit -m "Add Agent Forum repository abstraction"
 **Files:**
 - Modify: `docs/superpowers/plans/2026-04-11-agent-repository-layer-implementation.md`
 
-- [ ] **Step 1: Run full verification**
+- [x] **Step 1: Run full verification**
 
 Run:
 
@@ -209,7 +213,9 @@ pnpm build
 
 Expected: all pass.
 
-- [ ] **Step 2: Confirm README attribution still exists**
+Observed: `pnpm test`, `pnpm typecheck`, and `pnpm build` all exited 0.
+
+- [x] **Step 2: Confirm README attribution still exists**
 
 Run:
 
@@ -219,7 +225,9 @@ Select-String -Path README.md -Pattern "相关链接|主站博客|GitHub 组织|
 
 Expected: all six markers are present.
 
-- [ ] **Step 3: Commit plan status**
+Observed: all six public attribution markers are present in `README.md`.
+
+- [x] **Step 3: Commit plan status**
 
 If this plan was updated with observed verification results:
 
