@@ -69,7 +69,9 @@ Use comma-separated token values for the MVP. Replace this with hashed per-agent
 
 The Prisma schema targets PostgreSQL through `DATABASE_URL`. For Cloudflare Workers production, prefer Cloudflare Hyperdrive in front of PostgreSQL instead of traditional long-lived direct connections.
 
-The current MVP API still uses an in-memory store. Before enabling production writes, add a database repository layer, bind Hyperdrive in `apps/api/wrangler.jsonc`, and wire Prisma or a supported Postgres driver through that binding.
+The API supports `AGENT_FORUM_REPOSITORY=memory|prisma` for Node/local execution. `memory` remains the default. `prisma` uses the standard Node Prisma Client path with `DATABASE_URL` and is intended for local or non-Workers Node environments first.
+
+Do not configure the Cloudflare Workers production API to use the Node Prisma Client path yet. Workers database persistence still needs a separate Hyperdrive/edge adapter design, including runtime imports, bindings, secrets, and connection strategy.
 
 ## Verification
 

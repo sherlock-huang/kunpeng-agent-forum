@@ -27,7 +27,7 @@
 **Files:**
 - Create: `apps/api/tests/repository-factory.test.ts`
 
-- [ ] **Step 1: Write failing factory tests**
+- [x] **Step 1: Write failing factory tests**
 
 Create tests:
 
@@ -80,7 +80,7 @@ describe("createRepositoryFromEnv", () => {
 });
 ```
 
-- [ ] **Step 2: Run API tests and confirm RED**
+- [x] **Step 2: Run API tests and confirm RED**
 
 Run:
 
@@ -90,13 +90,15 @@ pnpm --filter @kunpeng-agent-forum/api test
 
 Expected: fail because `repository-factory.ts` does not exist.
 
+Observed: `pnpm --filter @kunpeng-agent-forum/api test` failed because `../src/repository-factory` did not exist.
+
 ## Task 2: Repository Interface Async Compatibility
 
 **Files:**
 - Modify: `apps/api/src/repository.ts`
 - Modify: `apps/api/src/routes.ts`
 
-- [ ] **Step 1: Allow sync or async repository methods**
+- [x] **Step 1: Allow sync or async repository methods**
 
 Add:
 
@@ -106,7 +108,7 @@ export type MaybePromise<T> = T | Promise<T>;
 
 Change each `ForumRepository` method return type to `MaybePromise<...>`.
 
-- [ ] **Step 2: Await repository calls in routes**
+- [x] **Step 2: Await repository calls in routes**
 
 Change route handlers to:
 
@@ -126,11 +128,11 @@ Also await `listThreads()`, `searchThreads()`, and `createThread()`.
 - Modify: `apps/api/src/index.ts`
 - Modify: `apps/api/src/worker.ts`
 
-- [ ] **Step 1: Create Prisma singleton**
+- [x] **Step 1: Create Prisma singleton**
 
 Create `apps/api/src/prisma-client.ts` with a Node/local singleton using `@prisma/client`.
 
-- [ ] **Step 2: Implement `PrismaForumRepository`**
+- [x] **Step 2: Implement `PrismaForumRepository`**
 
 Implement all `ForumRepository` methods:
 
@@ -145,7 +147,7 @@ If the Agent does not exist for write operations, throw:
 Agent not found: <agentSlug>
 ```
 
-- [ ] **Step 3: Implement `createRepositoryFromEnv()`**
+- [x] **Step 3: Implement `createRepositoryFromEnv()`**
 
 Implement:
 
@@ -156,13 +158,13 @@ AGENT_FORUM_AGENT_SLUG=codex
 
 with injectable factory dependencies for database-free unit tests.
 
-- [ ] **Step 4: Update Node and Worker startup**
+- [x] **Step 4: Update Node and Worker startup**
 
 `apps/api/src/index.ts` uses `createRepositoryFromEnv()`.
 
 `apps/api/src/worker.ts` keeps memory default and includes a comment that Workers persistence needs a later Hyperdrive/edge adapter.
 
-- [ ] **Step 5: Run API tests and typecheck**
+- [x] **Step 5: Run API tests and typecheck**
 
 Run:
 
@@ -173,7 +175,9 @@ pnpm --filter @kunpeng-agent-forum/api typecheck
 
 Expected: both pass without a live database.
 
-- [ ] **Step 6: Commit implementation**
+Observed: API tests passed with 3 files and 14 tests; API typecheck passed without requiring a live database.
+
+- [x] **Step 6: Commit implementation**
 
 ```powershell
 git add apps/api
@@ -186,7 +190,7 @@ git commit -m "Add Prisma repository selector"
 - Modify: `docs/cloudflare-deployment.md`
 - Modify: `docs/superpowers/plans/2026-04-12-prisma-repository-implementation.md`
 
-- [ ] **Step 1: Document Prisma/Workers boundary**
+- [x] **Step 1: Document Prisma/Workers boundary**
 
 Update `docs/cloudflare-deployment.md` to say:
 
@@ -194,7 +198,7 @@ Update `docs/cloudflare-deployment.md` to say:
 - Workers production persistence remains a later Hyperdrive/edge adapter step.
 - Do not configure Workers production to use Node Prisma Client until that adapter is designed.
 
-- [ ] **Step 2: Run full verification**
+- [x] **Step 2: Run full verification**
 
 Run:
 
@@ -206,7 +210,9 @@ pnpm build
 
 Expected: all pass.
 
-- [ ] **Step 3: Confirm README attribution still exists**
+Observed: `pnpm test`, `pnpm typecheck`, and `pnpm build` all exited 0.
+
+- [x] **Step 3: Confirm README attribution still exists**
 
 Run:
 
@@ -216,7 +222,9 @@ Select-String -Path README.md -Pattern "相关链接|主站博客|GitHub 组织|
 
 Expected: all six markers are present.
 
-- [ ] **Step 4: Commit plan status and docs**
+Observed: all six markers are present in `README.md`.
+
+- [x] **Step 4: Commit plan status and docs**
 
 ```powershell
 git add docs/cloudflare-deployment.md docs/superpowers/plans/2026-04-12-prisma-repository-implementation.md
