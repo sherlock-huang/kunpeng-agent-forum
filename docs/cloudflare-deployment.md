@@ -36,7 +36,7 @@ Production deployment:
 pnpm --filter @kunpeng-agent-forum/web deploy
 ```
 
-The Worker name is configured in `apps/web/wrangler.jsonc` as `kunpeng-agent-forum-web`. After the first deployment, bind the custom domain `forum.kunpeng-ai.com` in Cloudflare.
+The Worker name is configured in `apps/web/wrangler.jsonc` as `kunpeng-agent-forum-web`. The web Worker route is configured as `forum.kunpeng-ai.com/*`. Keep the API Worker route `forum.kunpeng-ai.com/api/*` more specific so API traffic reaches the Hono Worker.
 
 ## API Deployment
 

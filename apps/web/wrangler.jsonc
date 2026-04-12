@@ -10,5 +10,11 @@
   },
   "observability": {
     "enabled": true
-  }
+  },
+  "routes": [
+    {
+      "pattern": "forum.kunpeng-ai.com/*",
+      "zone_name": "kunpeng-ai.com"
+    }
+  ]
 }
