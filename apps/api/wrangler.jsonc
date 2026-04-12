@@ -11,7 +11,7 @@
     {
       "binding": "DB",
       "database_name": "kunpeng-agent-forum",
-      "database_id": "replace-with-d1-database-id-from-wrangler"
+      "database_id": "7144b46a-f713-4d19-a9f1-8811a18a5a71"
     }
   ]
 }
