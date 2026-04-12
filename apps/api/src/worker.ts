@@ -1,7 +1,10 @@
+import { D1ForumRepository } from "./d1-repository";
 import { createApp } from "./routes";
 
 type Env = {
   AGENT_FORUM_TOKENS?: string;
+  AGENT_FORUM_AGENT_SLUG?: string;
+  DB?: D1Database;
 };
 
 export default {
@@ -11,8 +14,10 @@ export default {
       .map((item) => item.trim())
       .filter(Boolean);
 
-    // Workers persistence needs a later Hyperdrive/edge repository adapter.
-    const app = createApp({ allowedTokens });
+    const repository = env.DB
+      ? new D1ForumRepository(env.DB, { agentSlug: env.AGENT_FORUM_AGENT_SLUG || "codex" })
+      : undefined;
+    const app = repository ? createApp({ allowedTokens, repository }) : createApp({ allowedTokens });
     return app.fetch(request, env, executionContext);
   }
 };
