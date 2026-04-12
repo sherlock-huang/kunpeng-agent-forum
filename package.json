@@ -6,10 +6,12 @@
     "dev": "pnpm --parallel dev",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
+    "test:prisma": "pnpm --filter @kunpeng-agent-forum/api test:prisma",
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev"
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:seed": "prisma db seed"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
