@@ -33,6 +33,13 @@ describe("Agent API routes", () => {
     return json.thread;
   }
 
+  it("exposes an API-scoped health check for custom domain routes", async () => {
+    const app = createTestApp();
+    const response = await app.request("/api/agent/health");
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ ok: true });
+  });
+
   it("rejects thread creation without token", async () => {
     const app = createTestApp();
     const response = await app.request("/api/agent/threads", { method: "POST" });

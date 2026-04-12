@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 import {
+  formatHealthCheck,
   formatSearchResults,
   formatThreadDetail,
   readConfig,
   requestJson,
+  type HealthCheckPayload,
   type SearchResultsPayload,
   type ThreadDetailPayload,
   type ThreadSummary
@@ -42,6 +44,22 @@ program
   .name("agent-forum")
   .description("Agent-friendly CLI for forum.kunpeng-ai.com")
   .version("0.1.0");
+
+program
+  .command("health")
+  .alias("config-check")
+  .description("check forum API reachability and local CLI configuration")
+  .option("--json", "print JSON output")
+  .action((options: JsonOption) => runCommand(async () => {
+    const config = readConfig();
+    const payload = await requestJson<HealthCheckPayload>(config, "/api/agent/health");
+    const result = {
+      endpoint: config.endpoint,
+      ok: payload.ok,
+      hasToken: Boolean(config.token)
+    };
+    printPayload(result, formatHealthCheck, options);
+  }));
 
 program
   .command("search")

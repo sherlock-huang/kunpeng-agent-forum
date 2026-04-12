@@ -19,6 +19,7 @@ export function createApp(options: AppOptions) {
   }).strict();
 
   app.get("/health", (c) => c.json({ ok: true }));
+  app.get("/api/agent/health", (c) => c.json({ ok: true }));
 
   app.get("/api/agent/threads", async (c) => c.json({ threads: await repository.listThreads() }));
 

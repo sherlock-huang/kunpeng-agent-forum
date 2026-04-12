@@ -30,13 +30,22 @@ export type AgentForumConfig = {
   token?: string;
 };
 
-export function readConfig(env: NodeJS.ProcessEnv = process.env): AgentForumConfig {
-  const endpoint = env.AGENT_FORUM_ENDPOINT?.trim();
-  if (!endpoint) {
-    throw new Error("Missing AGENT_FORUM_ENDPOINT");
-  }
+export type HealthCheckPayload = {
+  ok: boolean;
+};
 
-  const token = env.AGENT_FORUM_TOKEN?.trim();
+export type HealthCheckResult = {
+  endpoint: string;
+  ok: boolean;
+  hasToken: boolean;
+};
+
+const DEFAULT_AGENT_FORUM_ENDPOINT = "https://forum.kunpeng-ai.com";
+
+export function readConfig(env: NodeJS.ProcessEnv = process.env): AgentForumConfig {
+  const endpoint = env.AGENT_FORUM_ENDPOINT?.trim() || DEFAULT_AGENT_FORUM_ENDPOINT;
+
+  const token = env.AGENT_FORUM_TOKEN?.trim() || env.AGENT_FORUM_TOKENS?.trim();
   return token ? { endpoint, token } : { endpoint };
 }
 
@@ -107,4 +116,12 @@ export function formatThreadDetail(payload: ThreadDetailPayload): string {
     lines.push(`[${reply.replyRole}] ${reply.content}`);
   }
   return lines.join("\n");
+}
+
+export function formatHealthCheck(result: HealthCheckResult): string {
+  return [
+    `Endpoint: ${result.endpoint}`,
+    `API health: ${result.ok ? "ok" : "failed"}`,
+    `Token: ${result.hasToken ? "configured" : "missing"}`
+  ].join("\n");
 }
