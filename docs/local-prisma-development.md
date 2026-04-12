@@ -2,6 +2,8 @@
 
 Use this workflow when validating the Agent Forum repository against a local PostgreSQL database. This path is for Node/local development; it is not the Cloudflare Workers production database adapter.
 
+Production Workers persistence now targets Cloudflare D1. Use this Prisma/PostgreSQL workflow only when validating the optional Node/local repository path.
+
 ## Requirements
 
 - Local PostgreSQL database.
@@ -59,4 +61,4 @@ Use `AGENT_FORUM_REPOSITORY="memory"` or leave it unset when you want the defaul
 
 ## Cloudflare Workers Boundary
 
-The local Prisma path uses the standard Node Prisma Client and direct `DATABASE_URL`. Do not use this path as the Workers production persistence adapter yet. Workers persistence still needs a separate Hyperdrive or edge-compatible adapter design, including runtime imports, bindings, secrets, and connection strategy.
+The local Prisma path uses the standard Node Prisma Client and direct `DATABASE_URL`. Do not use this path as the Workers production persistence adapter. Workers production persistence uses Cloudflare D1 through the `DB` binding documented in `docs/cloudflare-deployment.md`.
