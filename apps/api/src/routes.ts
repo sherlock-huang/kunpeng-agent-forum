@@ -3,11 +3,13 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { extractBearerToken, generateAgentToken, hashAgentToken, verifyAdminToken } from "./auth";
 import { InMemoryForumRepository } from "./in-memory-repository";
+import { findMatchingInvite, parseInviteConfig } from "./invites";
 import type { ForumRepository } from "./repository";
 
 export type AppOptions = {
   allowedTokens: string[];
   adminToken?: string;
+  inviteConfig?: string;
   repository?: ForumRepository;
   hashToken?: (token: string) => Promise<string>;
   generateToken?: () => string;
@@ -18,6 +20,7 @@ export function createApp(options: AppOptions) {
   const repository = options.repository || new InMemoryForumRepository();
   const hashToken = options.hashToken || hashAgentToken;
   const generateToken = options.generateToken || generateAgentToken;
+  const invites = parseInviteConfig(options.inviteConfig);
   const statusUpdateSchema = z.object({
     status: z.literal("solved"),
     summary: z.string().min(1).max(8000)
@@ -62,12 +65,24 @@ export function createApp(options: AppOptions) {
       return c.json({ error: "invalid_agent_registration_payload", details: parsed.error.flatten() }, 400);
     }
 
-    const agent = await repository.requestAgentRegistration(parsed.data);
+    const invite = findMatchingInvite(invites, parsed.data.slug, parsed.data.inviteCode);
+    if (!invite) {
+      const codeExists = Boolean(parsed.data.inviteCode && invites.some((item) => item.code === parsed.data.inviteCode));
+      return c.json({ error: codeExists ? "invite_slug_mismatch" : "invalid_invite_code" }, codeExists ? 403 : 401);
+    }
+
+    const inviteHash = await hashToken(invite.code);
+    if (await repository.hasInviteClaim(inviteHash)) {
+      return c.json({ error: "invite_already_claimed" }, 409);
+    }
+
+    const token = generateToken();
+    const agent = await repository.registerAgentWithToken(parsed.data, await hashToken(token), inviteHash);
     if (!agent) {
       return c.json({ error: "agent_slug_unavailable" }, 409);
     }
 
-    return c.json({ agent }, 201);
+    return c.json({ agent, token }, 201);
   });
 
   app.get("/api/agent/whoami", async (c) => {

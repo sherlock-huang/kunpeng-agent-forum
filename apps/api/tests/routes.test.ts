@@ -17,6 +17,7 @@ describe("Agent API routes", () => {
       allowedTokens: [],
       adminToken: "admin-token",
       repository,
+      inviteConfig: JSON.stringify([{ code: "invite-agent", slug: "invite-agent" }, { code: "invite-open" }]),
       hashToken: async (token) => token === "agent-token" ? "sha256:agent-token-hash" : `sha256:${token}`,
       generateToken: () => `agent_forum_${"a".repeat(64)}`
     });
@@ -37,6 +38,7 @@ describe("Agent API routes", () => {
         allowedTokens: [],
         adminToken: "admin-token",
         repository,
+        inviteConfig: JSON.stringify([{ code: "invite-agent", slug: "invite-agent" }, { code: "invite-open" }]),
         hashToken: async (token) => token === "agent-token" ? "sha256:agent-token-hash" : `sha256:${token}`,
         generateToken: () => `agent_forum_${"a".repeat(64)}`
       }),
@@ -101,37 +103,87 @@ describe("Agent API routes", () => {
     await expect(repository.hasInviteClaim("sha256:invite")).resolves.toBe(true);
   });
 
-  it("registers a pending agent without returning a write token", async () => {
+  it("rejects registration without a valid invite code", async () => {
     const app = createTestApp();
     const response = await app.request("/api/agent/register", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        slug: "debug-agent",
-        name: "Debug Agent",
+        slug: "no-invite-agent",
+        name: "No Invite Agent",
         role: "debugging-agent",
-        description: "Investigates reproducible bug reports and writes structured follow-up notes.",
-        publicProfileUrl: "https://github.com/sherlock-huang/kunpeng-agent-forum"
+        description: "Attempts to register without an invite code."
+      })
+    });
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({ error: "invalid_invite_code" });
+  });
+
+  it("registers an invited agent as active and returns a token once", async () => {
+    const app = createTestApp();
+    const response = await app.request("/api/agent/register", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        slug: "invite-agent",
+        name: "Invite Agent",
+        role: "implementation-agent",
+        description: "Writes implementation notes and verification summaries.",
+        inviteCode: "invite-agent"
       })
     });
 
     expect(response.status).toBe(201);
-    const json = await response.json() as { agent: { slug: string; status: string }; token?: string };
-    expect(json.agent).toMatchObject({ slug: "debug-agent", status: "pending" });
-    expect(json).not.toHaveProperty("token");
+    const json = await response.json() as { agent: { slug: string; status: string }; token: string };
+    expect(json.agent).toMatchObject({ slug: "invite-agent", status: "active" });
+    expect(json.token).toMatch(/^agent_forum_[a-f0-9]{64}$/);
+
+    const whoami = await app.request("/api/agent/whoami", {
+      headers: { authorization: `Bearer ${json.token}` }
+    });
+    expect(whoami.status).toBe(200);
+  });
+
+  it("rejects reuse of an already claimed invite code", async () => {
+    const app = createTestApp();
+    const payload = {
+      slug: "open-invite-agent",
+      name: "Open Invite Agent",
+      role: "implementation-agent",
+      description: "Writes implementation notes and verification summaries.",
+      inviteCode: "invite-open"
+    };
+
+    expect((await app.request("/api/agent/register", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload)
+    })).status).toBe(201);
+
+    const second = await app.request("/api/agent/register", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ...payload, slug: "open-invite-agent-again" })
+    });
+    expect(second.status).toBe(409);
+    await expect(second.json()).resolves.toMatchObject({ error: "invite_already_claimed" });
   });
 
   it("requires admin auth before approving an agent and returns a one-time token when approved", async () => {
-    const app = createTestApp();
-    await app.request("/api/agent/register", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        slug: "release-agent",
-        name: "Release Agent",
-        role: "release-agent",
-        description: "Publishes verified release notes and deployment follow-up records."
-      })
+    const repository = new InMemoryForumRepository();
+    repository.requestAgentRegistration({
+      slug: "release-agent",
+      name: "Release Agent",
+      role: "release-agent",
+      description: "Publishes verified release notes and deployment follow-up records."
+    });
+    const app = createApp({
+      allowedTokens: [],
+      adminToken: "admin-token",
+      repository,
+      hashToken: async (token) => `sha256:${token}`,
+      generateToken: () => `agent_forum_${"a".repeat(64)}`
     });
 
     const unauthorized = await app.request("/api/admin/agents/release-agent/approve", { method: "POST" });
