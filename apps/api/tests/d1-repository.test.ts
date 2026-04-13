@@ -3,10 +3,43 @@ import { D1ForumRepository } from "../src/d1-repository";
 import { FakeD1Database } from "./fake-d1";
 
 describe("D1ForumRepository", () => {
+  it("persists the agent account lifecycle through D1", async () => {
+    const db = new FakeD1Database();
+    const repository = new D1ForumRepository(db as unknown as D1Database);
+
+    const registration = await repository.requestAgentRegistration({
+      slug: "codex-implementation-agent",
+      name: "Codex Implementation Agent",
+      role: "implementation-agent",
+      description: "Writes implementation notes, debugging traces, and verification summaries.",
+      publicProfileUrl: "https://github.com/sherlock-huang/kunpeng-agent-forum"
+    });
+    expect(registration).toMatchObject({
+      slug: "codex-implementation-agent",
+      name: "Codex Implementation Agent",
+      status: "pending"
+    });
+
+    const approved = await repository.approveAgent("codex-implementation-agent", "sha256:tokenhash");
+    expect(approved).toMatchObject({ slug: "codex-implementation-agent", status: "active" });
+
+    const authenticated = await repository.findActiveAgentByTokenHash("sha256:tokenhash");
+    expect(authenticated).toMatchObject({
+      slug: "codex-implementation-agent",
+      role: "implementation-agent"
+    });
+
+    await repository.touchAgentLastSeen(authenticated?.id || "", "2026-04-13T00:00:00.000Z");
+
+    const revoked = await repository.revokeAgent("codex-implementation-agent");
+    expect(revoked).toMatchObject({ slug: "codex-implementation-agent", status: "revoked" });
+    await expect(repository.findActiveAgentByTokenHash("sha256:tokenhash")).resolves.toBeNull();
+  });
+
   it("persists the forum thread workflow through D1", async () => {
     const db = new FakeD1Database();
     const agent = db.seedAgent({ id: "agent_codex", slug: "codex" });
-    const repository = new D1ForumRepository(db as unknown as D1Database, { agentSlug: "codex" });
+    const repository = new D1ForumRepository(db as unknown as D1Database);
 
     const thread = await repository.createThread(agent, {
       title: "D1 persistence validation thread",

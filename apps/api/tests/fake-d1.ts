@@ -82,7 +82,7 @@ export class FakeD1Database {
     return results;
   }
 
-  seedAgent(agent: { id: string; slug: string }): AuthenticatedAgent {
+  seedAgent(agent: { id: string; slug: string; tokenHash?: string; status?: string }): AuthenticatedAgent {
     this.agents.set(agent.slug, {
       id: agent.id,
       slug: agent.slug,
@@ -90,8 +90,8 @@ export class FakeD1Database {
       role: "implementation-agent",
       description: "Fake D1 test agent",
       public_profile_url: null,
-      write_token_hash: "fake",
-      status: "active",
+      write_token_hash: agent.tokenHash || "fake",
+      status: agent.status || "active",
       created_at: "2026-04-12T00:00:00.000Z",
       last_seen_at: null
     });
@@ -109,6 +109,89 @@ export class FakeD1Database {
 
     if (normalized.startsWith("select * from agents where slug =")) {
       return (Array.from(this.agents.values()).find((agent) => agent.slug === values[0]) || null) as T | null;
+    }
+
+    if (normalized.startsWith("select * from agents where write_token_hash =")) {
+      return (
+        Array.from(this.agents.values()).find(
+          (agent) => agent.write_token_hash === values[0] && agent.status === values[1]
+        ) || null
+      ) as T | null;
+    }
+
+    if (normalized.startsWith("insert into agents")) {
+      const id = stringValue(values, 0);
+      const slug = stringValue(values, 1);
+      const name = stringValue(values, 2);
+      const role = stringValue(values, 3);
+      const description = stringValue(values, 4);
+      const publicProfileUrl = values[5];
+      const writeTokenHash = stringValue(values, 6);
+      const status = stringValue(values, 7);
+      const createdAt = stringValue(values, 8);
+      const lastSeenAt = values[9];
+
+      this.agents.set(slug, {
+        id,
+        slug,
+        name,
+        role,
+        description,
+        public_profile_url: typeof publicProfileUrl === "string" ? publicProfileUrl : null,
+        write_token_hash: writeTokenHash,
+        status,
+        created_at: createdAt,
+        last_seen_at: typeof lastSeenAt === "string" ? lastSeenAt : null
+      });
+      return this.result<T>([]);
+    }
+
+    if (normalized.startsWith("update agents set name =")) {
+      const name = stringValue(values, 0);
+      const role = stringValue(values, 1);
+      const description = stringValue(values, 2);
+      const publicProfileUrl = values[3];
+      const slug = stringValue(values, 4);
+      const agent = this.agents.get(slug);
+      if (agent) {
+        agent.name = name;
+        agent.role = role;
+        agent.description = description;
+        agent.public_profile_url = typeof publicProfileUrl === "string" ? publicProfileUrl : null;
+      }
+      return this.result<T>([]);
+    }
+
+    if (normalized.startsWith("update agents set write_token_hash =")) {
+      const tokenHash = stringValue(values, 0);
+      const status = stringValue(values, 1);
+      const slug = stringValue(values, 2);
+      const agent = this.agents.get(slug);
+      if (agent) {
+        agent.write_token_hash = tokenHash;
+        agent.status = status;
+      }
+      return this.result<T>([]);
+    }
+
+    if (normalized.startsWith("update agents set status =")) {
+      const status = stringValue(values, 0);
+      const slug = stringValue(values, 1);
+      const agent = this.agents.get(slug);
+      if (agent) {
+        agent.status = status;
+      }
+      return this.result<T>([]);
+    }
+
+    if (normalized.startsWith("update agents set last_seen_at =")) {
+      const lastSeenAt = stringValue(values, 0);
+      const id = stringValue(values, 1);
+      const agent = Array.from(this.agents.values()).find((item) => item.id === id);
+      if (agent) {
+        agent.last_seen_at = lastSeenAt;
+      }
+      return this.result<T>([]);
     }
 
     if (normalized.startsWith("insert into threads")) {

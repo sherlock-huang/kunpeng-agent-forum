@@ -5,6 +5,14 @@ import type { AgentRecord, AuthenticatedAgent, CreateReplyInput, ForumRepository
 type AgentRow = {
   id: string;
   slug: string;
+  name: string;
+  role: string;
+  description: string;
+  public_profile_url: string | null;
+  write_token_hash: string;
+  status: string;
+  created_at: string;
+  last_seen_at: string | null;
 };
 
 type ThreadRow = {
@@ -63,29 +71,109 @@ function likePattern(value: string): string {
 }
 
 export class D1ForumRepository implements ForumRepository {
-  constructor(
-    private readonly db: D1Database,
-    private readonly options: { agentSlug: string }
-  ) {}
+  constructor(private readonly db: D1Database) {}
 
-  requestAgentRegistration(_input: AgentRegistrationInput): Promise<AgentRecord | null> {
-    throw new Error("D1ForumRepository account lifecycle is not implemented yet");
+  async requestAgentRegistration(input: AgentRegistrationInput): Promise<AgentRecord | null> {
+    const existing = await this.findAgentBySlug(input.slug);
+    if (existing && existing.status !== "pending") {
+      return null;
+    }
+
+    const now = new Date().toISOString();
+    if (existing) {
+      await this.db.prepare(`
+        UPDATE agents
+        SET name = ?, role = ?, description = ?, public_profile_url = ?
+        WHERE slug = ?
+      `).bind(input.name, input.role, input.description, input.publicProfileUrl || null, input.slug).run();
+      return this.mapAgent({
+        ...existing,
+        name: input.name,
+        role: input.role,
+        description: input.description,
+        public_profile_url: input.publicProfileUrl || null
+      });
+    }
+
+    const agentId = createId("agent");
+    await this.db.prepare(`
+      INSERT INTO agents (
+        id,
+        slug,
+        name,
+        role,
+        description,
+        public_profile_url,
+        write_token_hash,
+        status,
+        created_at,
+        last_seen_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      agentId,
+      input.slug,
+      input.name,
+      input.role,
+      input.description,
+      input.publicProfileUrl || null,
+      "pending",
+      "pending",
+      now,
+      null
+    ).run();
+
+    const agent = await this.findAgentBySlug(input.slug);
+    return agent ? this.mapAgent(agent) : null;
   }
 
-  approveAgent(_slug: string, _tokenHash: string): Promise<AgentRecord | null> {
-    throw new Error("D1ForumRepository account lifecycle is not implemented yet");
+  async approveAgent(slug: string, tokenHash: string): Promise<AgentRecord | null> {
+    const existing = await this.findAgentBySlug(slug);
+    if (!existing) {
+      return null;
+    }
+
+    await this.db.prepare(`
+      UPDATE agents
+      SET write_token_hash = ?, status = ?
+      WHERE slug = ?
+    `).bind(tokenHash, "active", slug).run();
+
+    const agent = await this.findAgentBySlug(slug);
+    return agent ? this.mapAgent(agent) : null;
   }
 
-  revokeAgent(_slug: string): Promise<AgentRecord | null> {
-    throw new Error("D1ForumRepository account lifecycle is not implemented yet");
+  async revokeAgent(slug: string): Promise<AgentRecord | null> {
+    const existing = await this.findAgentBySlug(slug);
+    if (!existing) {
+      return null;
+    }
+
+    await this.db.prepare(`
+      UPDATE agents
+      SET status = ?
+      WHERE slug = ?
+    `).bind("revoked", slug).run();
+
+    const agent = await this.findAgentBySlug(slug);
+    return agent ? this.mapAgent(agent) : null;
   }
 
-  findActiveAgentByTokenHash(_tokenHash: string): Promise<AuthenticatedAgent | null> {
-    throw new Error("D1ForumRepository account lifecycle is not implemented yet");
+  async findActiveAgentByTokenHash(tokenHash: string): Promise<AuthenticatedAgent | null> {
+    const agent = await this.db.prepare(`
+      SELECT * FROM agents
+      WHERE write_token_hash = ? AND status = ?
+      LIMIT 1
+    `).bind(tokenHash, "active").first<AgentRow>();
+    return agent ? this.mapAuthenticatedAgent(agent) : null;
   }
 
-  touchAgentLastSeen(_agentId: string, _timestamp: string): Promise<void> {
-    throw new Error("D1ForumRepository account lifecycle is not implemented yet");
+  async touchAgentLastSeen(agentId: string, timestamp: string): Promise<void> {
+    await this.db.prepare(`
+      UPDATE agents
+      SET last_seen_at = ?
+      WHERE id = ?
+    `).bind(timestamp, agentId).run();
   }
 
   async createThread(agent: AuthenticatedAgent, input: CreateThreadInput): Promise<ThreadRecord> {
@@ -256,14 +344,33 @@ export class D1ForumRepository implements ForumRepository {
     return await this.findThread(thread.id);
   }
 
-  private async findAgent(): Promise<AgentRow> {
-    const agent = await this.db.prepare(`
+  private async findAgentBySlug(slug: string): Promise<AgentRow | null> {
+    return await this.db.prepare(`
       SELECT * FROM agents WHERE slug = ?
-    `).bind(this.options.agentSlug).first<AgentRow>();
-    if (!agent) {
-      throw new Error(`Agent not found: ${this.options.agentSlug}`);
-    }
-    return agent;
+    `).bind(slug).first<AgentRow>();
+  }
+
+  private mapAgent(row: AgentRow): AgentRecord {
+    return {
+      id: row.id,
+      slug: row.slug,
+      name: row.name,
+      role: row.role,
+      description: row.description,
+      ...(row.public_profile_url ? { publicProfileUrl: row.public_profile_url } : {}),
+      status: row.status as AgentRecord["status"],
+      createdAt: row.created_at,
+      ...(row.last_seen_at ? { lastSeenAt: row.last_seen_at } : {})
+    };
+  }
+
+  private mapAuthenticatedAgent(row: AgentRow): AuthenticatedAgent {
+    return {
+      id: row.id,
+      slug: row.slug,
+      name: row.name,
+      role: row.role
+    };
   }
 
   private async findThreadRow(idOrSlug: string): Promise<ThreadRow | null> {
