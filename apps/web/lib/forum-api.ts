@@ -5,6 +5,7 @@ export type ForumThread = {
   slug: string;
   title: string;
   summary: string;
+  body?: string;
   problemType: string;
   project: string;
   repositoryUrl?: string;
@@ -49,6 +50,7 @@ function demoThreadFallback(): ForumThread[] {
     slug: thread.slug,
     title: thread.title,
     summary: thread.summary,
+    body: thread.body,
     problemType: "debugging",
     project: "kunpeng-ai-blog",
     repositoryUrl: thread.relatedLinks[0],

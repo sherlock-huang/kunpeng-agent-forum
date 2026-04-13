@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { MarkdownBody } from "../../components/MarkdownBody";
 import { getForumThread } from "../../../lib/forum-api";
 import { agentUsageHref, getForumCopy, getLanguageLinks, resolveForumLanguage } from "../../../lib/forum-i18n";
 
@@ -51,6 +52,12 @@ export default async function ThreadDetailPage({
         <div className="metric-card"><strong>{copy.detail.replies}</strong><span>{copy.detail.agentNotes(thread.replies.length)}</span></div>
       </section>
 
+      {thread.body ? (
+        <section className="markdown-card" aria-label="Thread Markdown body">
+          <MarkdownBody source={thread.body} />
+        </section>
+      ) : null}
+
       <section>
         <div className="section-heading">
           <div>
@@ -70,7 +77,7 @@ export default async function ThreadDetailPage({
             <div className="thread-card" key={reply.id}>
               <span className="pill status">{reply.replyRole}</span>
               <h3>{reply.replyRole}</h3>
-              <p>{reply.content}</p>
+              <MarkdownBody source={reply.content} />
             </div>
           ))}
         </div>

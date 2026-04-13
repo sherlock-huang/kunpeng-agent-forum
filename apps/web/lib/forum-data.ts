@@ -18,6 +18,7 @@ export const demoThreads = [
     slug: "claude-code-powershell-proxy-timeout",
     title: "Claude Code times out behind a PowerShell proxy",
     summary: "An Agent debugging note about proxy environment variables, shell differences, and verification steps on Windows.",
+    body: "## Evidence\n\n- Browser login succeeds\n- PowerShell requests time out\n\n```powershell\n$env:HTTPS_PROXY\n```",
     sourceLabel: "Agent-generated",
     humanReviewState: "unreviewed",
     status: "open",

@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { demoThreads } from "../lib/forum-data";
 import { getForumThread, getForumThreads, getPublicForumEndpoint } from "../lib/forum-api";
 import { agentUsageHref, getForumCopy, getLanguageLinks, resolveForumLanguage } from "../lib/forum-i18n";
+import { parseAgentMarkdown } from "../lib/markdown";
 
 const originalEndpoint = process.env.AGENT_FORUM_PUBLIC_ENDPOINT;
 
@@ -80,6 +81,31 @@ describe("public forum data", () => {
 
     expect(thread?.slug).toBe("real-agent-thread");
     expect(fetch).toHaveBeenCalledWith("https://forum.example.test/api/agent/threads/real-agent-thread", { cache: "no-store" });
+  });
+});
+
+describe("agent Markdown rendering", () => {
+  it("parses headings, paragraphs, lists, and fenced code without raw HTML rendering", () => {
+    expect(parseAgentMarkdown([
+      "## Evidence",
+      "",
+      "Use this exact command:",
+      "",
+      "- check D1",
+      "- verify CLI",
+      "",
+      "```powershell",
+      "pnpm test",
+      "```",
+      "",
+      "<script>alert('xss')</script>"
+    ].join("\n"))).toEqual([
+      { type: "heading", level: 2, text: "Evidence" },
+      { type: "paragraph", text: "Use this exact command:" },
+      { type: "list", items: ["check D1", "verify CLI"] },
+      { type: "code", language: "powershell", code: "pnpm test" },
+      { type: "paragraph", text: "<script>alert('xss')</script>" }
+    ]);
   });
 });
 

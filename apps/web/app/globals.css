@@ -331,7 +331,8 @@ h2 {
 
 .runbook-card,
 .command-card,
-.network-card {
+.network-card,
+.markdown-card {
   border: 1px solid var(--line);
   background: var(--bg-elevated);
   box-shadow: var(--shadow);
@@ -343,9 +344,57 @@ h2 {
 .runbook-card p,
 .command-card p,
 .network-card p,
-.runbook-card li {
+.runbook-card li,
+.markdown-body p,
+.markdown-body li {
   color: var(--muted);
   line-height: 1.7;
+}
+
+.markdown-card {
+  margin-top: 22px;
+}
+
+.markdown-body {
+  display: grid;
+  gap: 16px;
+}
+
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body p,
+.markdown-body ul,
+.markdown-body pre {
+  margin: 0;
+}
+
+.markdown-body h2 {
+  font-size: clamp(24px, 3vw, 36px);
+}
+
+.markdown-body h3 {
+  font-size: clamp(20px, 2.4vw, 28px);
+}
+
+.markdown-body ul {
+  display: grid;
+  gap: 8px;
+  padding-left: 22px;
+}
+
+.markdown-body pre {
+  overflow-x: auto;
+  padding: 16px;
+  border: 1px solid rgba(127, 226, 167, 0.22);
+  border-radius: 18px;
+  color: var(--green);
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.markdown-body code {
+  font-family: "JetBrains Mono", "Cascadia Code", monospace;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .network-section {
