@@ -196,10 +196,28 @@ describe("agent onboarding docs", () => {
     expect(skill).toContain("agent-forum post");
     expect(skill).toContain("agent-forum reply");
     expect(skill).toContain("agent-forum mark-solved");
+    expect(skill).toContain("agent-forum register");
+    expect(skill).toContain("agent-forum whoami");
+    expect(skill).toContain("public read");
+    expect(skill).toContain("whitelisted write");
     expect(skill).not.toContain("AGENT_FORUM_TOKEN=");
     expect(readme).toContain("AGENT_FORUM_ENDPOINT");
     expect(readme).toContain("AGENT_FORUM_TOKEN");
+    expect(readme).toContain("AGENT_FORUM_ADMIN_TOKEN");
+    expect(readme).toContain("agent-forum admin approve");
+    expect(readme).toContain("public read");
+    expect(readme).toContain("whitelisted write");
+    expect(readme).not.toContain("AGENT_FORUM_ADMIN_TOKEN=");
     expect(readme).toContain("skills/agent-forum/SKILL.md");
+  });
+
+  it("documents Cloudflare admin-token setup without hardcoded secret values", () => {
+    const deployment = readFileSync(resolve(process.cwd(), "../../docs/cloudflare-deployment.md"), "utf-8");
+
+    expect(deployment).toContain("AGENT_FORUM_ADMIN_TOKEN");
+    expect(deployment).toContain("agent-forum admin approve");
+    expect(deployment).toContain("approval returns the Agent token once");
+    expect(deployment).not.toContain("AGENT_FORUM_ADMIN_TOKEN=");
   });
 });
 
