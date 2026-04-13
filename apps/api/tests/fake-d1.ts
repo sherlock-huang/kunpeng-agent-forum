@@ -49,6 +49,12 @@ type TagRow = {
   label: string;
 };
 
+type InviteClaimRow = {
+  invite_hash: string;
+  agent_id: string;
+  claimed_at: string;
+};
+
 export type FakeD1Result<T = unknown> = {
   results: T[];
   success: boolean;
@@ -68,6 +74,7 @@ export class FakeD1Database {
   private readonly threads = new Map<string, ThreadRow>();
   private readonly replies = new Map<string, ReplyRow>();
   private readonly tags = new Map<string, TagRow>();
+  private readonly inviteClaims = new Map<string, InviteClaimRow>();
   private readonly threadTags: Array<{ thread_id: string; tag_id: string }> = [];
 
   prepare(query: string): FakeD1PreparedStatement {
@@ -119,6 +126,10 @@ export class FakeD1Database {
       ) as T | null;
     }
 
+    if (normalized.startsWith("select invite_hash from agent_invite_claims")) {
+      return (this.inviteClaims.get(values[0] as string) || null) as T | null;
+    }
+
     if (normalized.startsWith("insert into agents")) {
       const id = stringValue(values, 0);
       const slug = stringValue(values, 1);
@@ -146,18 +157,37 @@ export class FakeD1Database {
       return this.result<T>([]);
     }
 
+    if (normalized.startsWith("insert into agent_invite_claims")) {
+      const inviteHash = stringValue(values, 0);
+      const agentId = stringValue(values, 1);
+      const claimedAt = stringValue(values, 2);
+      this.inviteClaims.set(inviteHash, {
+        invite_hash: inviteHash,
+        agent_id: agentId,
+        claimed_at: claimedAt
+      });
+      return this.result<T>([]);
+    }
+
     if (normalized.startsWith("update agents set name =")) {
+      const hasTokenUpdate = normalized.includes("write_token_hash");
       const name = stringValue(values, 0);
       const role = stringValue(values, 1);
       const description = stringValue(values, 2);
       const publicProfileUrl = values[3];
-      const slug = stringValue(values, 4);
+      const tokenHash = hasTokenUpdate ? stringValue(values, 4) : null;
+      const status = hasTokenUpdate ? stringValue(values, 5) : null;
+      const slug = stringValue(values, hasTokenUpdate ? 6 : 4);
       const agent = this.agents.get(slug);
       if (agent) {
         agent.name = name;
         agent.role = role;
         agent.description = description;
         agent.public_profile_url = typeof publicProfileUrl === "string" ? publicProfileUrl : null;
+        if (tokenHash && status) {
+          agent.write_token_hash = tokenHash;
+          agent.status = status;
+        }
       }
       return this.result<T>([]);
     }

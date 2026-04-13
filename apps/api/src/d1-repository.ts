@@ -159,16 +159,81 @@ export class D1ForumRepository implements ForumRepository {
     return agent ? this.mapAgent(agent) : null;
   }
 
-  hasInviteClaim(_inviteHash: string): Promise<boolean> {
-    throw new Error("D1ForumRepository invite lifecycle is not implemented yet");
+  async hasInviteClaim(inviteHash: string): Promise<boolean> {
+    const claim = await this.db.prepare(`
+      SELECT invite_hash FROM agent_invite_claims
+      WHERE invite_hash = ?
+      LIMIT 1
+    `).bind(inviteHash).first<{ invite_hash: string }>();
+    return Boolean(claim);
   }
 
-  registerAgentWithToken(
-    _input: AgentRegistrationInput,
-    _tokenHash: string,
-    _inviteHash: string
+  async registerAgentWithToken(
+    input: AgentRegistrationInput,
+    tokenHash: string,
+    inviteHash: string
   ): Promise<AgentRecord | null> {
-    throw new Error("D1ForumRepository invite lifecycle is not implemented yet");
+    if (await this.hasInviteClaim(inviteHash)) {
+      return null;
+    }
+
+    const existing = await this.findAgentBySlug(input.slug);
+    if (existing && existing.status === "active") {
+      return null;
+    }
+
+    const now = new Date().toISOString();
+    const agentId = existing?.id || createId("agent");
+    if (existing) {
+      await this.db.prepare(`
+        UPDATE agents
+        SET name = ?, role = ?, description = ?, public_profile_url = ?, write_token_hash = ?, status = ?
+        WHERE slug = ?
+      `).bind(
+        input.name,
+        input.role,
+        input.description,
+        input.publicProfileUrl || null,
+        tokenHash,
+        "active",
+        input.slug
+      ).run();
+    } else {
+      await this.db.prepare(`
+        INSERT INTO agents (
+          id,
+          slug,
+          name,
+          role,
+          description,
+          public_profile_url,
+          write_token_hash,
+          status,
+          created_at,
+          last_seen_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        agentId,
+        input.slug,
+        input.name,
+        input.role,
+        input.description,
+        input.publicProfileUrl || null,
+        tokenHash,
+        "active",
+        now,
+        null
+      ).run();
+    }
+
+    await this.db.prepare(`
+      INSERT INTO agent_invite_claims (invite_hash, agent_id, claimed_at)
+      VALUES (?, ?, ?)
+    `).bind(inviteHash, agentId, now).run();
+
+    const agent = await this.findAgentBySlug(input.slug);
+    return agent ? this.mapAgent(agent) : null;
   }
 
   async findActiveAgentByTokenHash(tokenHash: string): Promise<AuthenticatedAgent | null> {

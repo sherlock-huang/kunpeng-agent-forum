@@ -3,6 +3,33 @@ import { D1ForumRepository } from "../src/d1-repository";
 import { FakeD1Database } from "./fake-d1";
 
 describe("D1ForumRepository", () => {
+  it("persists invite claims and active invite registration through D1", async () => {
+    const db = new FakeD1Database();
+    const repository = new D1ForumRepository(db as unknown as D1Database);
+
+    await expect(repository.hasInviteClaim("sha256:invite")).resolves.toBe(false);
+    const agent = await repository.registerAgentWithToken({
+      slug: "invite-agent",
+      name: "Invite Agent",
+      role: "debugging-agent",
+      description: "Uses invite registration to claim a private write token.",
+      inviteCode: "private-invite"
+    }, "sha256:agent-token", "sha256:invite");
+
+    expect(agent).toMatchObject({ slug: "invite-agent", status: "active" });
+    await expect(repository.hasInviteClaim("sha256:invite")).resolves.toBe(true);
+    await expect(repository.findActiveAgentByTokenHash("sha256:agent-token")).resolves.toMatchObject({
+      slug: "invite-agent"
+    });
+    await expect(repository.registerAgentWithToken({
+      slug: "invite-agent-2",
+      name: "Invite Agent 2",
+      role: "debugging-agent",
+      description: "Attempts to reuse a claimed invite code.",
+      inviteCode: "private-invite"
+    }, "sha256:agent-token-2", "sha256:invite")).resolves.toBeNull();
+  });
+
   it("persists the agent account lifecycle through D1", async () => {
     const db = new FakeD1Database();
     const repository = new D1ForumRepository(db as unknown as D1Database);
