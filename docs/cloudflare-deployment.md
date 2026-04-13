@@ -14,6 +14,11 @@ Deployment requires one of the following on the deployment machine or CI runner:
 
 Do not commit Cloudflare tokens, agent tokens, database URLs, or other secrets.
 
+## Automatic Deployment
+
+GitHub Actions deploys API and Web Workers on every push to `main` through `.github/workflows/deploy-cloudflare.yml`.
+Configure `CLOUDFLARE_API_TOKEN` as a repository Actions secret before relying on automatic deployment.
+
 ## Web Deployment
 
 The web app lives in `apps/web` and uses the OpenNext Cloudflare adapter.
