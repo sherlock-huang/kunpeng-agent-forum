@@ -4,9 +4,21 @@ import { createApp } from "../src/routes";
 
 describe("Agent API routes", () => {
   function createTestApp() {
+    const repository = new InMemoryForumRepository();
+    repository.seedAgent({
+      id: "agent_codex",
+      slug: "codex",
+      name: "Codex",
+      role: "implementation-agent",
+      tokenHash: "sha256:agent-token-hash",
+      status: "active"
+    });
     return createApp({
-      allowedTokens: ["agent-token"],
-      repository: new InMemoryForumRepository()
+      allowedTokens: [],
+      adminToken: "admin-token",
+      repository,
+      hashToken: async (token) => token === "agent-token" ? "sha256:agent-token-hash" : `sha256:${token}`,
+      generateToken: () => `agent_forum_${"a".repeat(64)}`
     });
   }
 
@@ -20,7 +32,17 @@ describe("Agent API routes", () => {
       tokenHash: "sha256:agent-token-hash",
       status: "active"
     });
-    return { app: createApp({ allowedTokens: [], repository }), repository, activeAgent };
+    return {
+      app: createApp({
+        allowedTokens: [],
+        adminToken: "admin-token",
+        repository,
+        hashToken: async (token) => token === "agent-token" ? "sha256:agent-token-hash" : `sha256:${token}`,
+        generateToken: () => `agent_forum_${"a".repeat(64)}`
+      }),
+      repository,
+      activeAgent
+    };
   }
 
   async function createThreadThroughApi(app: ReturnType<typeof createApp>, title: string) {
@@ -61,6 +83,90 @@ describe("Agent API routes", () => {
 
     expect(search.status).toBe(200);
     expect(list.status).toBe(200);
+  });
+
+  it("registers a pending agent without returning a write token", async () => {
+    const app = createTestApp();
+    const response = await app.request("/api/agent/register", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        slug: "debug-agent",
+        name: "Debug Agent",
+        role: "debugging-agent",
+        description: "Investigates reproducible bug reports and writes structured follow-up notes.",
+        publicProfileUrl: "https://github.com/sherlock-huang/kunpeng-agent-forum"
+      })
+    });
+
+    expect(response.status).toBe(201);
+    const json = await response.json() as { agent: { slug: string; status: string }; token?: string };
+    expect(json.agent).toMatchObject({ slug: "debug-agent", status: "pending" });
+    expect(json).not.toHaveProperty("token");
+  });
+
+  it("requires admin auth before approving an agent and returns a one-time token when approved", async () => {
+    const app = createTestApp();
+    await app.request("/api/agent/register", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        slug: "release-agent",
+        name: "Release Agent",
+        role: "release-agent",
+        description: "Publishes verified release notes and deployment follow-up records."
+      })
+    });
+
+    const unauthorized = await app.request("/api/admin/agents/release-agent/approve", { method: "POST" });
+    expect(unauthorized.status).toBe(401);
+
+    const approved = await app.request("/api/admin/agents/release-agent/approve", {
+      method: "POST",
+      headers: { authorization: "Bearer admin-token" }
+    });
+    expect(approved.status).toBe(200);
+    const json = await approved.json() as { agent: { slug: string; status: string }; token: string };
+    expect(json.agent).toMatchObject({ slug: "release-agent", status: "active" });
+    expect(json.token).toMatch(/^agent_forum_[a-f0-9]{64}$/);
+  });
+
+  it("identifies an active agent from its bearer token", async () => {
+    const app = createTestApp();
+    const response = await app.request("/api/agent/whoami", {
+      headers: { authorization: "Bearer agent-token" }
+    });
+
+    expect(response.status).toBe(200);
+    const json = await response.json() as { agent: { slug: string; role: string } };
+    expect(json.agent).toMatchObject({ slug: "codex", role: "implementation-agent" });
+  });
+
+  it("revokes an agent and blocks future writes with the same token", async () => {
+    const app = createTestApp();
+
+    const revoked = await app.request("/api/admin/agents/codex/revoke", {
+      method: "POST",
+      headers: { authorization: "Bearer admin-token" }
+    });
+    expect(revoked.status).toBe(200);
+
+    const response = await app.request("/api/agent/threads", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer agent-token",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        title: "Revoked token write attempt",
+        summary: "This write should be blocked because the agent token was revoked.",
+        problemType: "debugging",
+        project: "kunpeng-agent-forum",
+        environment: "route auth test",
+        tags: ["auth"]
+      })
+    });
+    expect(response.status).toBe(401);
   });
 
   it("rejects thread creation without token", async () => {

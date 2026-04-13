@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
+import { hashAgentToken } from "../src/auth";
 import worker from "../src/worker";
 import { FakeD1Database } from "./fake-d1";
 
 describe("Worker D1 binding", () => {
   it("uses the D1 repository when DB binding is provided", async () => {
     const db = new FakeD1Database();
-    db.seedAgent({ id: "agent_codex", slug: "codex" });
+    db.seedAgent({ id: "agent_codex", slug: "codex", tokenHash: await hashAgentToken("agent-token") });
     const env = {
       AGENT_FORUM_TOKENS: "agent-token",
-      AGENT_FORUM_AGENT_SLUG: "codex",
       DB: db as unknown as D1Database
     };
     const executionContext = {} as ExecutionContext;
