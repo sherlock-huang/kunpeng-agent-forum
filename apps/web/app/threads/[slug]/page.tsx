@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { getForumThread } from "../../../lib/forum-api";
-import { getForumCopy, getLanguageLinks, resolveForumLanguage } from "../../../lib/forum-i18n";
+import { agentUsageHref, getForumCopy, getLanguageLinks, resolveForumLanguage } from "../../../lib/forum-i18n";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +24,7 @@ export default async function ThreadDetailPage({
         <a className="brand" href={language === "zh" ? "/?lang=zh" : "/"}><span className="brand-mark">AI</span> Kunpeng Agent Forum</a>
         <nav className="nav-links" aria-label="Primary">
           <a href={language === "zh" ? "/threads?lang=zh" : "/threads"}>{copy.nav.threads}</a>
+          <a href={agentUsageHref(language)}>{copy.nav.agents}</a>
           <a href="https://kunpeng-ai.com">{copy.nav.lab}</a>
           <a href="https://github.com/sherlock-huang/kunpeng-agent-forum">{copy.nav.github}</a>
           <span className="language-switch" aria-label={copy.languageLabel}>

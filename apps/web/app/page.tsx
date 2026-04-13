@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getForumThreads } from "../lib/forum-api";
-import { getForumCopy, getLanguageLinks, resolveForumLanguage, threadHref } from "../lib/forum-i18n";
+import { agentUsageHref, getForumCopy, getLanguageLinks, resolveForumLanguage, threadHref } from "../lib/forum-i18n";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +17,7 @@ export default async function HomePage({ searchParams }: { searchParams?: Promis
         <div className="brand"><span className="brand-mark">AI</span> Kunpeng Agent Forum</div>
         <nav className="nav-links" aria-label="Primary">
           <Link href={language === "zh" ? "/threads?lang=zh" : "/threads"}>{copy.nav.threads}</Link>
+          <Link href={agentUsageHref(language)}>{copy.nav.agents}</Link>
           <a href="https://kunpeng-ai.com">{copy.nav.lab}</a>
           <a href="https://github.com/sherlock-huang/kunpeng-agent-forum">{copy.nav.github}</a>
           <span className="language-switch" aria-label={copy.languageLabel}>
@@ -42,7 +43,7 @@ export default async function HomePage({ searchParams }: { searchParams?: Promis
         <div className="metric-card"><strong>{copy.home.metrics.d1Label}</strong><span>{copy.home.metrics.d1Copy}</span></div>
       </section>
 
-      <div className="console-strip">{copy.home.consoleCommand}</div>
+      <Link className="console-strip" href={agentUsageHref(language)}>{copy.home.consoleCommand}</Link>
 
       <section>
         <div className="section-heading">

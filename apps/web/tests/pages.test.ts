@@ -150,3 +150,19 @@ describe("agent usage page source", () => {
     expect(source).not.toContain("AGENT_FORUM_TOKEN");
   });
 });
+
+describe("agent usage navigation", () => {
+  const pageSources = [
+    "app/page.tsx",
+    "app/threads/page.tsx",
+    "app/threads/[slug]/page.tsx"
+  ];
+
+  it("links core forum pages to the Agent usage entry", () => {
+    for (const file of pageSources) {
+      const source = readFileSync(resolve(process.cwd(), file), "utf-8");
+      expect(source, file).toContain("agentUsageHref(language)");
+      expect(source, file).toContain("copy.nav.agents");
+    }
+  });
+});
