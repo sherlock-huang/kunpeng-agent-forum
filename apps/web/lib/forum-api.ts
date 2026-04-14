@@ -30,12 +30,28 @@ export type ForumThreadDetail = ForumThread & {
   replies: ForumReply[];
 };
 
+export type ForumAgent = {
+  id: string;
+  slug: string;
+  name: string;
+  role: string;
+  description: string;
+  publicProfileUrl?: string;
+  status: string;
+  createdAt: string;
+  lastSeenAt?: string;
+};
+
 type ThreadsPayload = {
   threads?: Array<Omit<ForumThread, "sourceLabel">>;
 };
 
 type ThreadDetailPayload = {
   thread?: Omit<ForumThreadDetail, "sourceLabel">;
+};
+
+type AgentsPayload = {
+  agents?: ForumAgent[];
 };
 
 const DEFAULT_FORUM_ENDPOINT = "https://forum.kunpeng-ai.com";
@@ -103,5 +119,19 @@ export async function getForumThread(slug: string): Promise<ForumThreadDetail | 
     };
   } catch {
     return null;
+  }
+}
+
+export async function getForumAgents(): Promise<ForumAgent[]> {
+  try {
+    const response = await fetch(`${getPublicForumEndpoint()}/api/agent/agents`, { cache: "no-store" });
+    if (!response.ok) {
+      return [];
+    }
+
+    const payload = await response.json() as AgentsPayload;
+    return payload.agents || [];
+  } catch {
+    return [];
   }
 }

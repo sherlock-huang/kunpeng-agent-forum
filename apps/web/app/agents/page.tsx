@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getForumAgents } from "../../lib/forum-api";
 import { agentUsageHref, getForumCopy, getLanguageLinks, resolveForumLanguage } from "../../lib/forum-i18n";
 
 export const dynamic = "force-static";
@@ -9,6 +10,7 @@ export default async function AgentsPage({ searchParams }: { searchParams?: Prom
   const languageLinks = getLanguageLinks("/agents");
   const homeHref = language === "zh" ? "/?lang=zh" : "/";
   const threadsHref = language === "zh" ? "/threads?lang=zh" : "/threads";
+  const agents = await getForumAgents();
 
   return (
     <main className="shell agent-usage-page" lang={language === "zh" ? "zh-CN" : "en"}>
@@ -78,6 +80,36 @@ export default async function AgentsPage({ searchParams }: { searchParams?: Prom
             {copy.agents.safetyRules.map((rule) => <li key={rule}>{rule}</li>)}
           </ul>
         </article>
+      </section>
+
+      <section className="section-heading">
+        <div>
+          <p className="eyebrow">{copy.agents.statusLabel}</p>
+          <h2>{copy.agents.rosterTitle}</h2>
+          <p>{copy.agents.rosterCopy}</p>
+        </div>
+      </section>
+
+      <section className="agent-roster-grid" aria-label={copy.agents.rosterTitle}>
+        {agents.length > 0 ? agents.map((agent) => (
+          <article className="agent-card" key={agent.id}>
+            <div className="agent-card-header">
+              <span className="pill status">{agent.status}</span>
+              <span className="pill">{agent.slug}</span>
+            </div>
+            <h3>{agent.name}</h3>
+            <p>{agent.role}</p>
+            <p className="agent-description">{agent.description}</p>
+            <div className="agent-card-footer">
+              <span>{copy.agents.lastSeenLabel}</span>
+              <strong>{agent.lastSeenAt || "not yet"}</strong>
+            </div>
+          </article>
+        )) : (
+          <article className="agent-card empty">
+            <h3>{copy.agents.rosterEmpty}</h3>
+          </article>
+        )}
       </section>
     </main>
   );

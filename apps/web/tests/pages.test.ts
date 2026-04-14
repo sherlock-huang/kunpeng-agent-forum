@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { demoThreads } from "../lib/forum-data";
-import { getForumThread, getForumThreads, getPublicForumEndpoint } from "../lib/forum-api";
+import { getForumAgents, getForumThread, getForumThreads, getPublicForumEndpoint } from "../lib/forum-api";
 import { agentUsageHref, getForumCopy, getLanguageLinks, resolveForumLanguage } from "../lib/forum-i18n";
 import { parseAgentMarkdown } from "../lib/markdown";
 
@@ -81,6 +81,28 @@ describe("public forum data", () => {
 
     expect(thread?.slug).toBe("real-agent-thread");
     expect(fetch).toHaveBeenCalledWith("https://forum.example.test/api/agent/threads/real-agent-thread", { cache: "no-store" });
+  });
+
+  it("fetches public agent roster data from the API without token fields", async () => {
+    process.env.AGENT_FORUM_PUBLIC_ENDPOINT = "https://forum.example.test/";
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      agents: [{
+        id: "agent_codex",
+        slug: "codex",
+        name: "Codex",
+        role: "implementation-agent",
+        description: "Writes implementation notes.",
+        status: "active",
+        createdAt: "2026-04-12T00:00:00.000Z",
+        lastSeenAt: "2026-04-13T00:00:00.000Z"
+      }]
+    }), { status: 200 })));
+
+    const agents = await getForumAgents();
+
+    expect(agents).toEqual([expect.objectContaining({ slug: "codex", status: "active" })]);
+    expect(JSON.stringify(agents)).not.toContain("token");
+    expect(fetch).toHaveBeenCalledWith("https://forum.example.test/api/agent/agents", { cache: "no-store" });
   });
 });
 
@@ -162,6 +184,7 @@ describe("forum language support", () => {
       "agent-forum mark-solved <thread-slug> --summary \"<verified fix and evidence>\""
     ]));
     expect(copy.agents.safetyRules.join(" ")).toContain("Never paste tokens into the browser");
+    expect(copy.agents.rosterTitle).toContain("Agent");
   });
 
   it("provides Chinese Agent usage copy while keeping CLI commands stable", () => {
@@ -171,6 +194,7 @@ describe("forum language support", () => {
     expect(copy.agents.heroTitle).toContain("\u4f7f\u7528\u5165\u53e3");
     expect(copy.agents.commands.some((command) => command.command === "agent-forum health")).toBe(true);
     expect(copy.agents.safetyRules.join(" ")).toContain("\u4e0d\u8981\u628a token \u7c98\u8d34\u5230\u6d4f\u89c8\u5668");
+    expect(copy.agents.rosterTitle).toContain("Agent");
   });
 });
 
@@ -182,6 +206,8 @@ describe("agent usage page source", () => {
     const source = readFileSync(pagePath, "utf-8");
     expect(source).toContain("copy.agents.heroTitle");
     expect(source).toContain("copy.agents.commands");
+    expect(source).toContain("getForumAgents");
+    expect(source).toContain("copy.agents.rosterTitle");
     expect(source).toContain("agentUsageHref");
     expect(source).not.toContain("AGENT_FORUM_TOKEN");
   });

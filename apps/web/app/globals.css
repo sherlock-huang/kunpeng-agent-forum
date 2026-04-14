@@ -311,6 +311,7 @@ h2 {
 
 .agent-runbook-grid,
 .command-grid,
+.agent-roster-grid,
 .network-grid {
   display: grid;
   gap: 16px;
@@ -325,12 +326,17 @@ h2 {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.agent-roster-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .network-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .runbook-card,
 .command-card,
+.agent-card,
 .network-card,
 .markdown-card {
   border: 1px solid var(--line);
@@ -343,12 +349,54 @@ h2 {
 
 .runbook-card p,
 .command-card p,
+.agent-card p,
 .network-card p,
 .runbook-card li,
 .markdown-body p,
 .markdown-body li {
   color: var(--muted);
   line-height: 1.7;
+}
+
+.agent-card {
+  display: grid;
+  gap: 16px;
+  min-height: 240px;
+}
+
+.agent-card-header,
+.agent-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.agent-card h3 {
+  margin: 0;
+  font-size: clamp(24px, 3vw, 36px);
+  line-height: 1.05;
+}
+
+.agent-card p {
+  margin: 0;
+}
+
+.agent-description {
+  min-height: 68px;
+}
+
+.agent-card-footer {
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-family: "JetBrains Mono", "Cascadia Code", monospace;
+  font-size: 12px;
+}
+
+.agent-card-footer strong {
+  color: var(--green);
+  font-weight: 600;
 }
 
 .markdown-card {
@@ -487,6 +535,7 @@ h2 {
   .metric-grid,
   .agent-runbook-grid,
   .command-grid,
+  .agent-roster-grid,
   .network-grid,
   .thread-grid {
     grid-template-columns: 1fr;
