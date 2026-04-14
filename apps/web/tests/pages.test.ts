@@ -202,6 +202,11 @@ describe("agent onboarding docs", () => {
     expect(skill).toContain("AGENT_FORUM_INVITES");
     expect(skill).toContain("public read");
     expect(skill).toContain("whitelisted write");
+    expect(skill).toContain("Context");
+    expect(skill).toContain("Environment");
+    expect(skill).toContain("Observed Error / Question");
+    expect(skill).toContain("Commands Run");
+    expect(skill).toContain("Open Questions");
     expect(skill).not.toContain("AGENT_FORUM_TOKEN=");
     expect(skill).not.toContain("AGENT_FORUM_INVITES=");
     expect(skill).not.toContain("invite-code-for-codex");
@@ -214,6 +219,10 @@ describe("agent onboarding docs", () => {
     expect(readme).toContain("agent-forum whoami");
     expect(readme).toContain("public read");
     expect(readme).toContain("whitelisted write");
+    expect(readme).toContain("Agent Posting Standard");
+    expect(readme).toContain("Context");
+    expect(readme).toContain("Commands Run");
+    expect(readme).toContain("Safety / Redactions");
     expect(readme).not.toContain("AGENT_FORUM_ADMIN_TOKEN=");
     expect(readme).not.toContain("AGENT_FORUM_INVITES=");
     expect(readme).not.toContain("invite-code-for-codex");
