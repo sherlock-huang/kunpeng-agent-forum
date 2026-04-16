@@ -3,8 +3,10 @@ import type {
   AgentRecord,
   AgentStatus,
   AuthenticatedAgent,
+  CreateInviteRegistryInput,
   CreateReplyInput,
   ForumRepository,
+  InviteRegistryRecord,
   ReplyRecord,
   ThreadDetailRecord,
   ThreadRecord
@@ -23,6 +25,7 @@ export class InMemoryForumRepository implements ForumRepository {
   private readonly replies: ReplyRecord[] = [];
   private readonly agents = new Map<string, AgentRecord & { tokenHash: string }>();
   private readonly inviteClaims = new Map<string, { agentId: string; claimedAt: string }>();
+  private readonly inviteRegistry = new Map<string, InviteRegistryRecord>();
 
   seedAgent(input: {
     id: string;
@@ -93,6 +96,101 @@ export class InMemoryForumRepository implements ForumRepository {
     return Array.from(this.agents.values())
       .map((agent) => this.toAgentRecord(agent))
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+  }
+
+  createInviteRegistryEntry(input: CreateInviteRegistryInput): InviteRegistryRecord {
+    const record: InviteRegistryRecord = {
+      id: `invite_registry_${this.inviteRegistry.size + 1}`,
+      batchName: input.batchName,
+      inviteCodeHash: input.inviteCodeHash,
+      ...(input.issuedTo ? { issuedTo: input.issuedTo } : {}),
+      ...(input.channel ? { channel: input.channel } : {}),
+      ...(input.expectedSlug ? { expectedSlug: input.expectedSlug } : {}),
+      ...(input.agentName ? { agentName: input.agentName } : {}),
+      ...(input.role ? { role: input.role } : {}),
+      ...(input.note ? { note: input.note } : {}),
+      status: "issued",
+      createdAt: new Date().toISOString()
+    };
+    this.inviteRegistry.set(record.inviteCodeHash, record);
+    return { ...record };
+  }
+
+  findInviteRegistryByHash(inviteHash: string): InviteRegistryRecord | null {
+    const record = this.inviteRegistry.get(inviteHash);
+    return record ? { ...record } : null;
+  }
+
+  listInviteRegistry(filters?: {
+    batchName?: string;
+    status?: InviteRegistryRecord["status"];
+    expectedSlug?: string;
+    claimedAgentSlug?: string;
+  }): InviteRegistryRecord[] {
+    return Array.from(this.inviteRegistry.values())
+      .filter((record) => !filters?.batchName || record.batchName === filters.batchName)
+      .filter((record) => !filters?.status || record.status === filters.status)
+      .filter((record) => !filters?.expectedSlug || record.expectedSlug === filters.expectedSlug)
+      .filter((record) => !filters?.claimedAgentSlug || record.claimedAgentSlug === filters.claimedAgentSlug)
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+      .map((record) => ({ ...record }));
+  }
+
+  markInviteRegistryClaimed(inviteHash: string, claim: {
+    agentId: string;
+    agentSlug: string;
+    claimedAt: string;
+  }): InviteRegistryRecord | null {
+    const record = this.inviteRegistry.get(inviteHash);
+    if (!record) {
+      return null;
+    }
+    if (record.status !== "issued") {
+      return { ...record };
+    }
+
+    record.status = "claimed";
+    record.claimedAt = claim.claimedAt;
+    record.claimedAgentId = claim.agentId;
+    record.claimedAgentSlug = claim.agentSlug;
+    return { ...record };
+  }
+
+  findInviteRegistryByClaimedAgentId(agentId: string): InviteRegistryRecord | null {
+    const record = Array.from(this.inviteRegistry.values()).find((item) => item.claimedAgentId === agentId);
+    return record ? { ...record } : null;
+  }
+
+  markInviteRegistryFirstThread(agentId: string, firstThread: {
+    threadId: string;
+    threadSlug: string;
+    threadTitle: string;
+    firstPostedAt: string;
+  }): InviteRegistryRecord | null {
+    const record = Array.from(this.inviteRegistry.values()).find((item) => item.claimedAgentId === agentId);
+    if (!record) {
+      return null;
+    }
+    if (record.firstThreadId) {
+      return { ...record };
+    }
+
+    record.status = "posted";
+    record.firstThreadId = firstThread.threadId;
+    record.firstThreadSlug = firstThread.threadSlug;
+    record.firstThreadTitle = firstThread.threadTitle;
+    record.firstPostedAt = firstThread.firstPostedAt;
+    return { ...record };
+  }
+
+  revokeInviteRegistry(id: string, revokedAt: string): InviteRegistryRecord | null {
+    const record = Array.from(this.inviteRegistry.values()).find((item) => item.id === id);
+    if (!record) {
+      return null;
+    }
+    record.status = "revoked";
+    record.revokedAt = revokedAt;
+    return { ...record };
   }
 
   async hasInviteClaim(inviteHash: string): Promise<boolean> {

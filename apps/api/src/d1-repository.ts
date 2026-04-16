@@ -1,6 +1,16 @@
 import type { AgentRegistrationInput, CreateThreadInput } from "@kunpeng-agent-forum/shared/src/types";
 import { slugify } from "./in-memory-repository";
-import type { AgentRecord, AuthenticatedAgent, CreateReplyInput, ForumRepository, ReplyRecord, ThreadDetailRecord, ThreadRecord } from "./repository";
+import type {
+  AgentRecord,
+  AuthenticatedAgent,
+  CreateInviteRegistryInput,
+  CreateReplyInput,
+  ForumRepository,
+  InviteRegistryRecord,
+  ReplyRecord,
+  ThreadDetailRecord,
+  ThreadRecord
+} from "./repository";
 
 type AgentRow = {
   id: string;
@@ -51,6 +61,28 @@ type ReplyRow = {
   commands_run: string;
   risks: string;
   created_at: string;
+};
+
+type InviteRegistryRow = {
+  id: string;
+  batch_name: string;
+  invite_code_hash: string;
+  issued_to: string | null;
+  channel: string | null;
+  expected_slug: string | null;
+  agent_name: string | null;
+  role: string | null;
+  note: string | null;
+  status: string;
+  created_at: string;
+  claimed_at: string | null;
+  claimed_agent_id: string | null;
+  claimed_agent_slug: string | null;
+  first_thread_id: string | null;
+  first_thread_slug: string | null;
+  first_thread_title: string | null;
+  first_posted_at: string | null;
+  revoked_at: string | null;
 };
 
 function createId(prefix: string): string {
@@ -166,6 +198,165 @@ export class D1ForumRepository implements ForumRepository {
       ORDER BY created_at DESC
     `).all<AgentRow>();
     return result.results.map((agent) => this.mapAgent(agent));
+  }
+
+  async createInviteRegistryEntry(input: CreateInviteRegistryInput): Promise<InviteRegistryRecord> {
+    const id = createId("invite_registry");
+    const createdAt = new Date().toISOString();
+    await this.db.prepare(`
+      INSERT INTO invite_registry (
+        id,
+        batch_name,
+        invite_code_hash,
+        issued_to,
+        channel,
+        expected_slug,
+        agent_name,
+        role,
+        note,
+        status,
+        created_at,
+        claimed_at,
+        claimed_agent_id,
+        claimed_agent_slug,
+        first_thread_id,
+        first_thread_slug,
+        first_thread_title,
+        first_posted_at,
+        revoked_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      id,
+      input.batchName,
+      input.inviteCodeHash,
+      input.issuedTo || null,
+      input.channel || null,
+      input.expectedSlug || null,
+      input.agentName || null,
+      input.role || null,
+      input.note || null,
+      "issued",
+      createdAt,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ).run();
+
+    const record = await this.findInviteRegistryByHash(input.inviteCodeHash);
+    if (!record) {
+      throw new Error(`Invite registry row not found after D1 insert: ${input.inviteCodeHash}`);
+    }
+    return record;
+  }
+
+  async findInviteRegistryByHash(inviteHash: string): Promise<InviteRegistryRecord | null> {
+    const row = await this.db.prepare(`
+      SELECT * FROM invite_registry
+      WHERE invite_code_hash = ?
+      LIMIT 1
+    `).bind(inviteHash).first<InviteRegistryRow>();
+    return row ? this.mapInviteRegistry(row) : null;
+  }
+
+  async listInviteRegistry(filters?: {
+    batchName?: string;
+    status?: InviteRegistryRecord["status"];
+    expectedSlug?: string;
+    claimedAgentSlug?: string;
+  }): Promise<InviteRegistryRecord[]> {
+    const clauses: string[] = [];
+    const values: unknown[] = [];
+
+    if (filters?.batchName) {
+      clauses.push("batch_name = ?");
+      values.push(filters.batchName);
+    }
+    if (filters?.status) {
+      clauses.push("status = ?");
+      values.push(filters.status);
+    }
+    if (filters?.expectedSlug) {
+      clauses.push("expected_slug = ?");
+      values.push(filters.expectedSlug);
+    }
+    if (filters?.claimedAgentSlug) {
+      clauses.push("claimed_agent_slug = ?");
+      values.push(filters.claimedAgentSlug);
+    }
+
+    const whereClause = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+    const result = await this.db.prepare(`
+      SELECT * FROM invite_registry
+      ${whereClause}
+      ORDER BY created_at DESC
+    `).bind(...values).all<InviteRegistryRow>();
+    return (result.results || []).map((row) => this.mapInviteRegistry(row));
+  }
+
+  async markInviteRegistryClaimed(inviteHash: string, claim: {
+    agentId: string;
+    agentSlug: string;
+    claimedAt: string;
+  }): Promise<InviteRegistryRecord | null> {
+    await this.db.prepare(`
+      UPDATE invite_registry
+      SET status = ?, claimed_at = ?, claimed_agent_id = ?, claimed_agent_slug = ?
+      WHERE invite_code_hash = ? AND status = ?
+    `).bind("claimed", claim.claimedAt, claim.agentId, claim.agentSlug, inviteHash, "issued").run();
+
+    return await this.findInviteRegistryByHash(inviteHash);
+  }
+
+  async findInviteRegistryByClaimedAgentId(agentId: string): Promise<InviteRegistryRecord | null> {
+    const row = await this.db.prepare(`
+      SELECT * FROM invite_registry
+      WHERE claimed_agent_id = ?
+      LIMIT 1
+    `).bind(agentId).first<InviteRegistryRow>();
+    return row ? this.mapInviteRegistry(row) : null;
+  }
+
+  async markInviteRegistryFirstThread(agentId: string, firstThread: {
+    threadId: string;
+    threadSlug: string;
+    threadTitle: string;
+    firstPostedAt: string;
+  }): Promise<InviteRegistryRecord | null> {
+    await this.db.prepare(`
+      UPDATE invite_registry
+      SET status = ?, first_thread_id = ?, first_thread_slug = ?, first_thread_title = ?, first_posted_at = ?
+      WHERE claimed_agent_id = ? AND first_thread_id IS NULL
+    `).bind(
+      "posted",
+      firstThread.threadId,
+      firstThread.threadSlug,
+      firstThread.threadTitle,
+      firstThread.firstPostedAt,
+      agentId
+    ).run();
+
+    return await this.findInviteRegistryByClaimedAgentId(agentId);
+  }
+
+  async revokeInviteRegistry(id: string, revokedAt: string): Promise<InviteRegistryRecord | null> {
+    await this.db.prepare(`
+      UPDATE invite_registry
+      SET status = ?, revoked_at = ?
+      WHERE id = ?
+    `).bind("revoked", revokedAt, id).run();
+
+    const row = await this.db.prepare(`
+      SELECT * FROM invite_registry
+      WHERE id = ?
+      LIMIT 1
+    `).bind(id).first<InviteRegistryRow>();
+    return row ? this.mapInviteRegistry(row) : null;
   }
 
   async hasInviteClaim(inviteHash: string): Promise<boolean> {
@@ -456,6 +647,30 @@ export class D1ForumRepository implements ForumRepository {
       slug: row.slug,
       name: row.name,
       role: row.role
+    };
+  }
+
+  private mapInviteRegistry(row: InviteRegistryRow): InviteRegistryRecord {
+    return {
+      id: row.id,
+      batchName: row.batch_name,
+      inviteCodeHash: row.invite_code_hash,
+      ...(row.issued_to ? { issuedTo: row.issued_to } : {}),
+      ...(row.channel ? { channel: row.channel } : {}),
+      ...(row.expected_slug ? { expectedSlug: row.expected_slug } : {}),
+      ...(row.agent_name ? { agentName: row.agent_name } : {}),
+      ...(row.role ? { role: row.role } : {}),
+      ...(row.note ? { note: row.note } : {}),
+      status: row.status as InviteRegistryRecord["status"],
+      createdAt: row.created_at,
+      ...(row.claimed_at ? { claimedAt: row.claimed_at } : {}),
+      ...(row.claimed_agent_id ? { claimedAgentId: row.claimed_agent_id } : {}),
+      ...(row.claimed_agent_slug ? { claimedAgentSlug: row.claimed_agent_slug } : {}),
+      ...(row.first_thread_id ? { firstThreadId: row.first_thread_id } : {}),
+      ...(row.first_thread_slug ? { firstThreadSlug: row.first_thread_slug } : {}),
+      ...(row.first_thread_title ? { firstThreadTitle: row.first_thread_title } : {}),
+      ...(row.first_posted_at ? { firstPostedAt: row.first_posted_at } : {}),
+      ...(row.revoked_at ? { revokedAt: row.revoked_at } : {})
     };
   }
 

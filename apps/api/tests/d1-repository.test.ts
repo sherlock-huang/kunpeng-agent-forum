@@ -3,6 +3,81 @@ import { D1ForumRepository } from "../src/d1-repository";
 import { FakeD1Database } from "./fake-d1";
 
 describe("D1ForumRepository", () => {
+  it("stores issued invite registry rows with invite hashes only", async () => {
+    const db = new FakeD1Database();
+    const repository = new D1ForumRepository(db as unknown as D1Database);
+
+    const record = await repository.createInviteRegistryEntry({
+      batchName: "cohort-20260416-a",
+      inviteCodeHash: "sha256:invite-1",
+      issuedTo: "lisa",
+      channel: "dm",
+      expectedSlug: "agent-lisa-research",
+      agentName: "Lisa Research Agent",
+      role: "research-agent",
+      note: "first cohort"
+    });
+
+    expect(record).toMatchObject({
+      batchName: "cohort-20260416-a",
+      inviteCodeHash: "sha256:invite-1",
+      status: "issued"
+    });
+  });
+
+  it("moves invite registry from issued to claimed", async () => {
+    const db = new FakeD1Database();
+    const repository = new D1ForumRepository(db as unknown as D1Database);
+
+    await repository.createInviteRegistryEntry({
+      batchName: "cohort-20260416-a",
+      inviteCodeHash: "sha256:invite-1"
+    });
+
+    const claimed = await repository.markInviteRegistryClaimed("sha256:invite-1", {
+      agentId: "agent_lisa",
+      agentSlug: "agent-lisa-research",
+      claimedAt: "2026-04-16T12:00:00.000Z"
+    });
+
+    expect(claimed).toMatchObject({
+      status: "claimed",
+      claimedAgentId: "agent_lisa",
+      claimedAgentSlug: "agent-lisa-research"
+    });
+  });
+
+  it("records the first thread once and keeps later threads from overwriting it", async () => {
+    const db = new FakeD1Database();
+    const repository = new D1ForumRepository(db as unknown as D1Database);
+
+    await repository.createInviteRegistryEntry({
+      batchName: "cohort-20260416-a",
+      inviteCodeHash: "sha256:invite-1"
+    });
+    await repository.markInviteRegistryClaimed("sha256:invite-1", {
+      agentId: "agent_lisa",
+      agentSlug: "agent-lisa-research",
+      claimedAt: "2026-04-16T12:00:00.000Z"
+    });
+
+    const first = await repository.markInviteRegistryFirstThread("agent_lisa", {
+      threadId: "thread_1",
+      threadSlug: "first-thread",
+      threadTitle: "First Thread",
+      firstPostedAt: "2026-04-16T13:00:00.000Z"
+    });
+    const second = await repository.markInviteRegistryFirstThread("agent_lisa", {
+      threadId: "thread_2",
+      threadSlug: "second-thread",
+      threadTitle: "Second Thread",
+      firstPostedAt: "2026-04-16T14:00:00.000Z"
+    });
+
+    expect(first).toMatchObject({ status: "posted", firstThreadId: "thread_1" });
+    expect(second).toMatchObject({ status: "posted", firstThreadId: "thread_1" });
+  });
+
   it("persists invite claims and active invite registration through D1", async () => {
     const db = new FakeD1Database();
     const repository = new D1ForumRepository(db as unknown as D1Database);

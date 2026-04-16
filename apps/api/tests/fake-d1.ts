@@ -55,6 +55,28 @@ type InviteClaimRow = {
   claimed_at: string;
 };
 
+type InviteRegistryRow = {
+  id: string;
+  batch_name: string;
+  invite_code_hash: string;
+  issued_to: string | null;
+  channel: string | null;
+  expected_slug: string | null;
+  agent_name: string | null;
+  role: string | null;
+  note: string | null;
+  status: string;
+  created_at: string;
+  claimed_at: string | null;
+  claimed_agent_id: string | null;
+  claimed_agent_slug: string | null;
+  first_thread_id: string | null;
+  first_thread_slug: string | null;
+  first_thread_title: string | null;
+  first_posted_at: string | null;
+  revoked_at: string | null;
+};
+
 export type FakeD1Result<T = unknown> = {
   results: T[];
   success: boolean;
@@ -75,6 +97,7 @@ export class FakeD1Database {
   private readonly replies = new Map<string, ReplyRow>();
   private readonly tags = new Map<string, TagRow>();
   private readonly inviteClaims = new Map<string, InviteClaimRow>();
+  private readonly inviteRegistry = new Map<string, InviteRegistryRow>();
   private readonly threadTags: Array<{ thread_id: string; tag_id: string }> = [];
 
   prepare(query: string): FakeD1PreparedStatement {
@@ -135,6 +158,27 @@ export class FakeD1Database {
       return (this.inviteClaims.get(values[0] as string) || null) as T | null;
     }
 
+    if (normalized.startsWith("select * from invite_registry where invite_code_hash =")) {
+      return (this.inviteRegistry.get(values[0] as string) || null) as T | null;
+    }
+
+    if (normalized.startsWith("select * from invite_registry where claimed_agent_id =")) {
+      return (
+        Array.from(this.inviteRegistry.values()).find((record) => record.claimed_agent_id === values[0]) || null
+      ) as T | null;
+    }
+
+    if (normalized.startsWith("select * from invite_registry where id =")) {
+      return (
+        Array.from(this.inviteRegistry.values()).find((record) => record.id === values[0]) || null
+      ) as T | null;
+    }
+
+    if (normalized.startsWith("select * from invite_registry order by created_at desc")) {
+      const rows = Array.from(this.inviteRegistry.values()).sort((left, right) => right.created_at.localeCompare(left.created_at));
+      return this.result<T>(rows as T[]);
+    }
+
     if (normalized.startsWith("insert into agents")) {
       const id = stringValue(values, 0);
       const slug = stringValue(values, 1);
@@ -174,6 +218,32 @@ export class FakeD1Database {
       return this.result<T>([]);
     }
 
+    if (normalized.startsWith("insert into invite_registry")) {
+      const row: InviteRegistryRow = {
+        id: stringValue(values, 0),
+        batch_name: stringValue(values, 1),
+        invite_code_hash: stringValue(values, 2),
+        issued_to: typeof values[3] === "string" ? values[3] : null,
+        channel: typeof values[4] === "string" ? values[4] : null,
+        expected_slug: typeof values[5] === "string" ? values[5] : null,
+        agent_name: typeof values[6] === "string" ? values[6] : null,
+        role: typeof values[7] === "string" ? values[7] : null,
+        note: typeof values[8] === "string" ? values[8] : null,
+        status: stringValue(values, 9),
+        created_at: stringValue(values, 10),
+        claimed_at: typeof values[11] === "string" ? values[11] : null,
+        claimed_agent_id: typeof values[12] === "string" ? values[12] : null,
+        claimed_agent_slug: typeof values[13] === "string" ? values[13] : null,
+        first_thread_id: typeof values[14] === "string" ? values[14] : null,
+        first_thread_slug: typeof values[15] === "string" ? values[15] : null,
+        first_thread_title: typeof values[16] === "string" ? values[16] : null,
+        first_posted_at: typeof values[17] === "string" ? values[17] : null,
+        revoked_at: typeof values[18] === "string" ? values[18] : null
+      };
+      this.inviteRegistry.set(row.invite_code_hash, row);
+      return this.result<T>([]);
+    }
+
     if (normalized.startsWith("update agents set name =")) {
       const hasTokenUpdate = normalized.includes("write_token_hash");
       const name = stringValue(values, 0);
@@ -193,6 +263,39 @@ export class FakeD1Database {
           agent.write_token_hash = tokenHash;
           agent.status = status;
         }
+      }
+      return this.result<T>([]);
+    }
+
+    if (normalized.startsWith("update invite_registry set status = ?, claimed_at = ?, claimed_agent_id = ?, claimed_agent_slug = ?")) {
+      const record = this.inviteRegistry.get(stringValue(values, 4));
+      if (record && record.status === stringValue(values, 5)) {
+        record.status = stringValue(values, 0);
+        record.claimed_at = stringValue(values, 1);
+        record.claimed_agent_id = stringValue(values, 2);
+        record.claimed_agent_slug = stringValue(values, 3);
+      }
+      return this.result<T>([]);
+    }
+
+    if (normalized.startsWith("update invite_registry set status = ?, first_thread_id = ?, first_thread_slug = ?, first_thread_title = ?, first_posted_at = ?")) {
+      const agentId = stringValue(values, 5);
+      const record = Array.from(this.inviteRegistry.values()).find((item) => item.claimed_agent_id === agentId);
+      if (record && !record.first_thread_id) {
+        record.status = stringValue(values, 0);
+        record.first_thread_id = stringValue(values, 1);
+        record.first_thread_slug = stringValue(values, 2);
+        record.first_thread_title = stringValue(values, 3);
+        record.first_posted_at = stringValue(values, 4);
+      }
+      return this.result<T>([]);
+    }
+
+    if (normalized.startsWith("update invite_registry set status = ?, revoked_at = ?")) {
+      const record = Array.from(this.inviteRegistry.values()).find((item) => item.id === values[2]);
+      if (record) {
+        record.status = stringValue(values, 0);
+        record.revoked_at = stringValue(values, 1);
       }
       return this.result<T>([]);
     }
