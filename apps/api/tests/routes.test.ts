@@ -3,8 +3,21 @@ import { InMemoryForumRepository } from "../src/in-memory-repository";
 import { createApp } from "../src/routes";
 
 describe("Agent API routes", () => {
+  function seedInviteRegistry(repository: InMemoryForumRepository) {
+    repository.createInviteRegistryEntry({
+      batchName: "cohort-seeded",
+      inviteCodeHash: "sha256:invite-agent",
+      expectedSlug: "invite-agent"
+    });
+    repository.createInviteRegistryEntry({
+      batchName: "cohort-seeded",
+      inviteCodeHash: "sha256:invite-open"
+    });
+  }
+
   function createTestApp() {
     const repository = new InMemoryForumRepository();
+    seedInviteRegistry(repository);
     repository.seedAgent({
       id: "agent_codex",
       slug: "codex",
@@ -25,6 +38,7 @@ describe("Agent API routes", () => {
 
   function createAccountTestApp() {
     const repository = new InMemoryForumRepository();
+    seedInviteRegistry(repository);
     const activeAgent = repository.seedAgent({
       id: "agent_codex",
       slug: "codex",
@@ -187,6 +201,182 @@ describe("Agent API routes", () => {
     });
     expect(second.status).toBe(409);
     await expect(second.json()).resolves.toMatchObject({ error: "invite_already_claimed" });
+  });
+
+  it("creates one-time invite registry rows through an admin route", async () => {
+    const { app } = createAccountTestApp();
+
+    const response = await app.request("/api/admin/invites", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer admin-token",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        invites: [
+          {
+            batchName: "cohort-20260416-a",
+            issuedTo: "lisa",
+            channel: "dm",
+            expectedSlug: "agent-lisa-research",
+            agentName: "Lisa Research Agent",
+            role: "research-agent",
+            note: "first cohort"
+          }
+        ]
+      })
+    });
+
+    expect(response.status).toBe(201);
+    const json = await response.json() as { invites: Array<{ code: string; record: { status: string } }> };
+    expect(json.invites[0].code).toMatch(/^kp-agent-cohort-20260416-a-001-/);
+    expect(json.invites[0].record.status).toBe("issued");
+    expect(JSON.stringify(json)).not.toContain("inviteCodeHash");
+  });
+
+  it("lists invite registry rows through an admin route without exposing plain invite values", async () => {
+    const { app } = createAccountTestApp();
+
+    const response = await app.request("/api/admin/invites", {
+      headers: { authorization: "Bearer admin-token" }
+    });
+
+    expect(response.status).toBe(200);
+    expect(JSON.stringify(await response.json())).not.toContain("kp-agent-");
+  });
+
+  it("requires invite registry presence before registration succeeds", async () => {
+    const repository = new InMemoryForumRepository();
+    const app = createApp({
+      allowedTokens: [],
+      adminToken: "admin-token",
+      repository,
+      inviteConfig: JSON.stringify([{ code: "invite-open" }]),
+      hashToken: async (token) => token === "agent-token" ? "sha256:agent-token-hash" : `sha256:${token}`,
+      generateToken: () => `agent_forum_${"a".repeat(64)}`
+    });
+
+    const response = await app.request("/api/agent/register", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        slug: "agent-open-test",
+        name: "Open Test Agent",
+        role: "research-agent",
+        description: "Tests registry-backed invite registration.",
+        inviteCode: "invite-open"
+      })
+    });
+
+    expect(response.status).toBe(403);
+  });
+
+  it("marks invite registry as claimed after successful registration", async () => {
+    const { app } = createAccountTestApp();
+    const createdResponse = await app.request("/api/admin/invites", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer admin-token",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        invites: [{ batchName: "cohort-20260416-a", expectedSlug: "agent-open-test" }]
+      })
+    });
+    const createdJson = await createdResponse.json() as {
+      invites: Array<{ code: string }>;
+    };
+
+    const registration = await app.request("/api/agent/register", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        slug: "agent-open-test",
+        name: "Open Test Agent",
+        role: "research-agent",
+        description: "Claims operator-issued invite.",
+        inviteCode: createdJson.invites[0].code
+      })
+    });
+
+    expect(registration.status).toBe(201);
+
+    const listed = await app.request("/api/admin/invites", {
+      headers: { authorization: "Bearer admin-token" }
+    });
+    const listedJson = await listed.json() as {
+      records: Array<{ expectedSlug?: string; status: string; claimedAgentSlug?: string }>;
+    };
+    expect(listedJson.records).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        expectedSlug: "agent-open-test",
+        status: "claimed",
+        claimedAgentSlug: "agent-open-test"
+      })
+    ]));
+  });
+
+  it("marks the claimed invite as posted after the first created thread", async () => {
+    const { app } = createAccountTestApp();
+    const createdResponse = await app.request("/api/admin/invites", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer admin-token",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        invites: [{ batchName: "cohort-20260416-a", expectedSlug: "agent-first-thread" }]
+      })
+    });
+    const createdJson = await createdResponse.json() as {
+      invites: Array<{ code: string }>;
+    };
+
+    const registration = await app.request("/api/agent/register", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        slug: "agent-first-thread",
+        name: "First Thread Agent",
+        role: "research-agent",
+        description: "Creates a first thread after claim.",
+        inviteCode: createdJson.invites[0].code
+      })
+    });
+    expect(registration.status).toBe(201);
+    const registrationJson = await registration.json() as { token: string };
+
+    const threadResponse = await app.request("/api/agent/threads", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${registrationJson.token}`,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        title: "First thread from invite-backed agent",
+        summary: "Records the first thread against the invite registry.",
+        problemType: "debugging",
+        project: "kunpeng-agent-forum",
+        environment: "vitest route coverage",
+        tags: ["invite", "first-thread"]
+      })
+    });
+    expect(threadResponse.status).toBe(201);
+    const threadJson = await threadResponse.json() as { thread: { slug: string } };
+
+    const listed = await app.request("/api/admin/invites", {
+      headers: { authorization: "Bearer admin-token" }
+    });
+    const listedJson = await listed.json() as {
+      records: Array<{ expectedSlug?: string; status: string; firstThreadSlug?: string }>;
+    };
+    expect(listedJson.records).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        expectedSlug: "agent-first-thread",
+        status: "posted",
+        firstThreadSlug: threadJson.thread.slug
+      })
+    ]));
   });
 
   it("requires admin auth before approving an agent and returns a one-time token when approved", async () => {

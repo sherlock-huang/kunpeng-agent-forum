@@ -2,9 +2,10 @@ import { agentRegistrationSchema, createThreadSchema, replySchema } from "@kunpe
 import { Hono } from "hono";
 import { z } from "zod";
 import { extractBearerToken, generateAgentToken, hashAgentToken, verifyAdminToken } from "./auth";
+import { generateInviteEntries } from "./invite-generator";
 import { InMemoryForumRepository } from "./in-memory-repository";
 import { findMatchingInvite, parseInviteConfig } from "./invites";
-import type { ForumRepository } from "./repository";
+import type { ForumRepository, InviteRegistryRecord } from "./repository";
 
 export type AppOptions = {
   allowedTokens: string[];
@@ -15,12 +16,31 @@ export type AppOptions = {
   generateToken?: () => string;
 };
 
+const adminInviteInputSchema = z.object({
+  batchName: z.string().min(3).max(48),
+  issuedTo: z.string().min(1).max(200).optional(),
+  channel: z.string().min(1).max(120).optional(),
+  expectedSlug: z.string().min(1).max(120).optional(),
+  agentName: z.string().min(1).max(200).optional(),
+  role: z.string().min(1).max(120).optional(),
+  note: z.string().min(1).max(2000).optional()
+}).strict();
+
+const adminInviteBatchSchema = z.object({
+  invites: z.array(adminInviteInputSchema).min(1).max(50)
+}).strict();
+
+function toAdminInviteRecord(record: InviteRegistryRecord) {
+  const { inviteCodeHash: _inviteCodeHash, ...rest } = record;
+  return rest;
+}
+
 export function createApp(options: AppOptions) {
   const app = new Hono();
   const repository = options.repository || new InMemoryForumRepository();
   const hashToken = options.hashToken || hashAgentToken;
   const generateToken = options.generateToken || generateAgentToken;
-  const invites = parseInviteConfig(options.inviteConfig);
+  const invites = [...parseInviteConfig(options.inviteConfig)];
   const statusUpdateSchema = z.object({
     status: z.literal("solved"),
     summary: z.string().min(1).max(8000)
@@ -78,11 +98,22 @@ export function createApp(options: AppOptions) {
       return c.json({ error: "invite_already_claimed" }, 409);
     }
 
+    const inviteRegistry = await repository.findInviteRegistryByHash(inviteHash);
+    if (!inviteRegistry || inviteRegistry.status !== "issued") {
+      return c.json({ error: "invite_not_registered_for_operator_tracking" }, 403);
+    }
+
     const token = generateToken();
     const agent = await repository.registerAgentWithToken(parsed.data, await hashToken(token), inviteHash);
     if (!agent) {
       return c.json({ error: "agent_slug_unavailable" }, 409);
     }
+
+    await repository.markInviteRegistryClaimed(inviteHash, {
+      agentId: agent.id,
+      agentSlug: agent.slug,
+      claimedAt: new Date().toISOString()
+    });
 
     return c.json({ agent, token }, 201);
   });
@@ -123,6 +154,61 @@ export function createApp(options: AppOptions) {
     return c.json({ agent });
   });
 
+  app.post("/api/admin/invites", async (c) => {
+    if (!verifyAdminToken(c.req.header("authorization") || null, options.adminToken)) {
+      return c.json({ error: "unauthorized_admin_token" }, 401);
+    }
+
+    const body = await c.req.json().catch(() => null);
+    const parsed = adminInviteBatchSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: "invalid_admin_invite_payload", details: parsed.error.flatten() }, 400);
+    }
+
+    const generatedByBatch = new Map<string, Array<{ code: string }>>();
+    for (const invite of parsed.data.invites) {
+      if (!generatedByBatch.has(invite.batchName)) {
+        const count = parsed.data.invites.filter((entry) => entry.batchName === invite.batchName).length;
+        generatedByBatch.set(invite.batchName, [...generateInviteEntries({ count, batch: invite.batchName })]);
+      }
+    }
+
+    const created: Array<{ code: string; record: ReturnType<typeof toAdminInviteRecord> }> = [];
+    for (const invite of parsed.data.invites) {
+      const generated = generatedByBatch.get(invite.batchName)?.shift();
+      if (!generated) {
+        throw new Error(`Invite generator underflow for batch ${invite.batchName}`);
+      }
+
+      const record = await repository.createInviteRegistryEntry({
+        batchName: invite.batchName,
+        inviteCodeHash: await hashToken(generated.code),
+        issuedTo: invite.issuedTo,
+        channel: invite.channel,
+        expectedSlug: invite.expectedSlug,
+        agentName: invite.agentName,
+        role: invite.role,
+        note: invite.note
+      });
+      invites.push({
+        code: generated.code,
+        ...(invite.expectedSlug ? { slug: invite.expectedSlug } : {})
+      });
+      created.push({ code: generated.code, record: toAdminInviteRecord(record) });
+    }
+
+    return c.json({ invites: created }, 201);
+  });
+
+  app.get("/api/admin/invites", async (c) => {
+    if (!verifyAdminToken(c.req.header("authorization") || null, options.adminToken)) {
+      return c.json({ error: "unauthorized_admin_token" }, 401);
+    }
+
+    const records = await repository.listInviteRegistry();
+    return c.json({ records: records.map((record) => toAdminInviteRecord(record)) });
+  });
+
   app.post("/api/agent/threads", async (c) => {
     const agent = await authenticateAgent(c.req.header("authorization") || null);
     if (!agent) {
@@ -136,6 +222,16 @@ export function createApp(options: AppOptions) {
     }
 
     const thread = await repository.createThread(agent, parsed.data);
+    try {
+      await repository.markInviteRegistryFirstThread(agent.id, {
+        threadId: thread.id,
+        threadSlug: thread.slug,
+        threadTitle: thread.title,
+        firstPostedAt: thread.createdAt
+      });
+    } catch (error) {
+      console.error("Failed to backfill invite registry first thread", error);
+    }
     return c.json({ thread }, 201);
   });
 
